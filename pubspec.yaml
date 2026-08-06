@@ -15,10 +15,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_local_device_discovery_platform_interface: any
-  flutter_local_device_discovery_android: any
-  flutter_local_device_discovery_darwin: any
-  flutter_local_device_discovery_windows: any
+  flutter_local_device_discovery_platform_interface: ^0.1.0
+  flutter_local_device_discovery_android: ^0.1.0
+  flutter_local_device_discovery_darwin: ^0.1.0
+  flutter_local_device_discovery_windows: ^0.1.0
   plugin_platform_interface: ^2.1.8
 
 dev_dependencies:
