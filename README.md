@@ -1,39 +1,153 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# flutter_local_device_discovery
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Native local-network device and service discovery for Flutter using mDNS, DNS-SD, Bonjour, SSDP, UPnP and WS-Discovery across Android, iOS, macOS and Windows.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+[![Support on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/X8Y824GXT3)
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- **Native-first**: Uses the most appropriate native networking APIs on each platform
+- **mDNS/DNS-SD/Bonjour**: Service browsing and resolution
+- **Device models**: Normalized, strongly typed device and service models
+- **Continuous & snapshot modes**: Both live monitoring and bounded discovery
+- **Network-interface awareness**: IPv4/IPv6, Wi-Fi/Ethernet/VPN interfaces
+- **Deduplication**: Basic device deduplication across protocols
+- **Classification**: Basic device type classification
+- **Service-type validation**: Validate and parse service types
+- **Address parsing**: Parse and classify IPv4/IPv6 addresses
 
-## Getting started
+## Supported Platforms
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+| Platform | Status |
+|----------|--------|
+| Android  | ✅ Native NSD |
+| iOS      | ✅ Network framework |
+| macOS    | ✅ Network framework |
+| Windows  | 🚧 Foundation |
 
-## Usage
+## Installation
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+Add to your `pubspec.yaml`:
 
-```dart
-const like = 'sample';
+```yaml
+dependencies:
+  flutter_local_device_discovery: ^0.1.0
 ```
 
-## Additional information
+## Quick Start
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+### Snapshot Discovery
+
+```dart
+import 'package:flutter_local_device_discovery/flutter_local_device_discovery.dart';
+
+final discovery = FlutterLocalDeviceDiscovery();
+
+final result = await discovery.discover(
+  const LocalDiscoveryRequest(
+    duration: Duration(seconds: 8),
+    serviceTypes: {
+      '_http._tcp',
+      '_ipp._tcp',
+      '_printer._tcp',
+      '_googlecast._tcp',
+    },
+  ),
+);
+
+for (final device in result.devices) {
+  print('${device.displayName}: ${device.addresses}');
+}
+```
+
+### Continuous Discovery
+
+```dart
+final session = await discovery.start(
+  const LocalDiscoveryRequest(
+    mode: LocalDiscoveryMode.continuous,
+    serviceTypes: {'_http._tcp'},
+  ),
+);
+
+session.events.listen((event) {
+  switch (event) {
+    case LocalDeviceAdded():
+      print('Added: ${event.device.displayName}');
+    case LocalDeviceUpdated():
+      print('Updated: ${event.device.displayName}');
+    case LocalDeviceRemoved():
+      print('Removed: ${event.device.displayName}');
+    case LocalDiscoveryFailure():
+      print(event.error);
+  }
+});
+
+await session.stop();
+```
+
+### Capabilities
+
+```dart
+final capabilities = await discovery.getCapabilities();
+print(capabilities.supportedProtocols);
+```
+
+## Platform Configuration
+
+### Android
+
+Add these permissions to your `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+```
+
+### iOS
+
+Add to your `Info.plist`:
+
+```xml
+<key>NSLocalNetworkUsageDescription</key>
+<string>This app discovers devices and services available on your local network.</string>
+
+<key>NSBonjourServices</key>
+<array>
+    <string>_http._tcp</string>
+    <string>_ipp._tcp</string>
+</array>
+```
+
+Only include service types your application actually uses.
+
+### macOS
+
+Add to your entitlements file:
+
+```xml
+<key>com.apple.security.network.client</key>
+<true/>
+```
+
+### Windows
+
+Multicast traffic may be filtered by the Windows firewall. Public network profiles may behave differently. The plugin does not create firewall exceptions.
+
+## Security & Privacy
+
+- Discovery is not authentication or pairing
+- Discovery is not guaranteed inventory
+- No response does not always mean offline
+- Device classification may be inferred
+- MAC addresses may be unavailable
+- Multicast may be blocked on guest/enterprise/isolated networks
+- No analytics or telemetry is included
+- No data is uploaded anywhere
+
+## License
+
+MIT
