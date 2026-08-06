@@ -12,11 +12,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_local_device_discovery_platform_interface:
-    git:
-      url: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
-      path: flutter_local_device_discovery_platform_interface
-      ref: main
+  flutter_local_device_discovery_platform_interface: any
   plugin_platform_interface: ^2.1.8
 
 dev_dependencies:

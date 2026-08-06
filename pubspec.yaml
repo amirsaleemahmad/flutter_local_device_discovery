@@ -15,26 +15,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_local_device_discovery_platform_interface:
-    git:
-      url: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
-      path: flutter_local_device_discovery_platform_interface
-      ref: main
-  flutter_local_device_discovery_android:
-    git:
-      url: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
-      path: flutter_local_device_discovery_android
-      ref: main
-  flutter_local_device_discovery_darwin:
-    git:
-      url: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
-      path: flutter_local_device_discovery_darwin
-      ref: main
-  flutter_local_device_discovery_windows:
-    git:
-      url: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
-      path: flutter_local_device_discovery_windows
-      ref: main
+  flutter_local_device_discovery_platform_interface: any
+  flutter_local_device_discovery_android: any
+  flutter_local_device_discovery_darwin: any
+  flutter_local_device_discovery_windows: any
   plugin_platform_interface: ^2.1.8
 
 dev_dependencies:
