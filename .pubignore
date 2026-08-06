@@ -1,0 +1,5 @@
+# Files to exclude from pub.dev package
+PROMPT.md
+example/testResult.json
+example/android/build/
+example/build/
