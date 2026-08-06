@@ -2,7 +2,9 @@ name: flutter_local_device_discovery
 description: >
   Native local-network device and service discovery for Flutter using
   mDNS, DNS-SD, Bonjour, SSDP, UPnP and WS-Discovery across Android,
-  iOS, macOS and Windows.
+  iOS, macOS and Windows. #device-discovery #mdns #bonjour #dns-sd
+  #local-network #networking #upnp #ssdp #service-discovery
+  #zeroconf #multicast #flutter-plugin
 version: 0.1.0
 homepage: https://github.com/amirsaleemahmad/flutter_local_device_discovery
 repository: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
@@ -44,5 +46,5 @@ topics:
   - device-discovery
   - local-network
   - mdns
-  - upnp
   - networking
+  - service-discovery
