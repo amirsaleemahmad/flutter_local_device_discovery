@@ -29,3 +29,12 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+
+# Example build artifacts
+example/android/build/
+example/build/
+example/testResult.json
+
+# SPM build artifacts
+.build/
+.swiftpm/
