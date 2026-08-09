@@ -1,3 +1,19 @@
+## 0.2.0
+
+* Added SSDP (Simple Service Discovery Protocol) support.
+* Added UPnP device description parsing.
+* Added better device aggregation with cross-protocol deduplication.
+* Added capability evidence tracking.
+* Added metadata security policies for safe UPnP fetching.
+* Added `SsdpDevice` model for SSDP-discovered devices.
+* Added `UpnpDeviceDescription` model for parsed UPnP descriptions.
+* Added `CapabilityEvidence` model for tracking device capability sources.
+* Added `MetadataSecurityPolicy` for bounded, safe metadata fetching.
+* Added `DeviceAggregator` for merging devices from multiple protocols.
+* Added `copyWith` to `LocalDevice` for immutable updates.
+* Added unit tests for SSDP, UPnP, aggregator, and security policy.
+* Updated all subpackage versions to 0.2.0.
+
 ## 0.1.0
 
 * Initial release of `flutter_local_device_discovery`.

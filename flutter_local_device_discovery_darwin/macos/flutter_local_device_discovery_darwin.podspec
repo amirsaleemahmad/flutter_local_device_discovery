@@ -3,7 +3,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_local_device_discovery_darwin'
-  s.version          = '0.1.0'
+  s.version          = '0.2.0'
   s.summary          = 'Apple platform implementation of flutter_local_device_discovery.'
   s.description      = <<-DESC
 Apple platform implementation of flutter_local_device_discovery for iOS and macOS.

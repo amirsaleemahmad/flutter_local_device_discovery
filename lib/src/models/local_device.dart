@@ -100,6 +100,47 @@ class LocalDevice {
     return services.where((s) => s.serviceType == serviceType).toList();
   }
 
+  /// Creates a copy of this device with the given fields replaced.
+  LocalDevice copyWith({
+    String? id,
+    String? displayName,
+    String? hostname,
+    List<InternetAddressValue>? addresses,
+    List<LocalNetworkInterface>? interfaces,
+    List<LocalService>? services,
+    LocalDeviceType? type,
+    Set<LocalDeviceCapability>? capabilities,
+    LocalDeviceIdentity? identity,
+    LocalDeviceVendor? vendor,
+    LocalDeviceReachability? reachability,
+    Set<LocalDiscoveryProtocol>? discoveredBy,
+    DateTime? firstSeenAt,
+    DateTime? lastSeenAt,
+    Duration? advertisedTtl,
+    double? confidence,
+    Map<String, Object?>? metadata,
+  }) {
+    return LocalDevice(
+      id: id ?? this.id,
+      displayName: displayName ?? this.displayName,
+      hostname: hostname ?? this.hostname,
+      addresses: addresses ?? this.addresses,
+      interfaces: interfaces ?? this.interfaces,
+      services: services ?? this.services,
+      type: type ?? this.type,
+      capabilities: capabilities ?? this.capabilities,
+      identity: identity ?? this.identity,
+      vendor: vendor ?? this.vendor,
+      reachability: reachability ?? this.reachability,
+      discoveredBy: discoveredBy ?? this.discoveredBy,
+      firstSeenAt: firstSeenAt ?? this.firstSeenAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      advertisedTtl: advertisedTtl ?? this.advertisedTtl,
+      confidence: confidence ?? this.confidence,
+      metadata: metadata ?? this.metadata,
+    );
+  }
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

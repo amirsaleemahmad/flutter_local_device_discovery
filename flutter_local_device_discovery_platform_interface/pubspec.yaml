@@ -1,7 +1,7 @@
 name: flutter_local_device_discovery_platform_interface
 description: >
   A common platform interface for the flutter_local_device_discovery plugin.
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/amirsaleemahmad/flutter_local_device_discovery
 repository: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
 

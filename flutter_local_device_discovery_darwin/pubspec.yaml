@@ -2,7 +2,7 @@ name: flutter_local_device_discovery_darwin
 description: >
   Apple platform implementation (iOS and macOS) of the
   flutter_local_device_discovery plugin.
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/amirsaleemahmad/flutter_local_device_discovery
 repository: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
 
@@ -13,7 +13,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_local_device_discovery_platform_interface: any
+  flutter_local_device_discovery_platform_interface: ^0.2.0
   plugin_platform_interface: ^2.1.8
 
 dev_dependencies:

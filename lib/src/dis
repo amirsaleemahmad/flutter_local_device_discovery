@@ -1,0 +1,250 @@
+import 'local_device.dart';
+import 'local_device_type.dart';
+import 'local_device_capability.dart';
+import 'local_service.dart';
+import 'ssdp_device.dart';
+import 'upnp_device_description.dart';
+import 'capability_evidence.dart';
+import 'internet_address_value.dart';
+
+/// Aggregates and deduplicates devices discovered from multiple protocols.
+class DeviceAggregator {
+  DeviceAggregator();
+
+  /// Merges a list of devices, deduplicating by hostname, UDN, or service name.
+  List<LocalDevice> aggregate(List<LocalDevice> devices) {
+    final byKey = <String, LocalDevice>{};
+
+    for (final device in devices) {
+      final key = _deviceKey(device);
+      final existing = byKey[key];
+
+      if (existing == null) {
+        byKey[key] = device;
+      } else {
+        byKey[key] = _merge(existing, device);
+      }
+    }
+
+    return byKey.values.toList();
+  }
+
+  /// Merges an SSDP device into an existing device or creates a new one.
+  LocalDevice mergeSsdpDevice({
+    required LocalDevice? existing,
+    required SsdpDevice ssdp,
+    required String discoveredBy,
+  }) {
+    if (existing == null) {
+      return LocalDevice(
+        id: ssdp.usn,
+        displayName: ssdp.friendlyName ?? ssdp.searchTarget,
+        hostname: _extractHostFromUrl(ssdp.location),
+        type: _inferTypeFromSsdp(ssdp),
+        capabilities: _inferCapabilitiesFromSsdp(ssdp),
+        discoveredBy: {LocalDiscoveryProtocol.ssdp},
+        firstSeenAt: DateTime.now(),
+        lastSeenAt: DateTime.now(),
+        confidence: 0.7,
+        metadata: {
+          'ssdpLocation': ssdp.location,
+          'ssdpUsn': ssdp.usn,
+          'ssdpServer': ssdp.server,
+          'ssdpSt': ssdp.searchTarget,
+          if (ssdp.friendlyName != null) 'friendlyName': ssdp.friendlyName,
+          if (ssdp.manufacturer != null) 'manufacturer': ssdp.manufacturer,
+          if (ssdp.modelName != null) 'modelName': ssdp.modelName,
+          if (ssdp.udn != null) 'udn': ssdp.udn,
+        },
+      );
+    }
+
+    // Merge SSDP data into existing device.
+    return existing.copyWith(
+      displayName: ssdp.friendlyName ?? existing.displayName,
+      metadata: {
+        ...existing.metadata,
+        'ssdpLocation': ssdp.location,
+        'ssdpUsn': ssdp.usn,
+        if (ssdp.friendlyName != null) 'friendlyName': ssdp.friendlyName,
+        if (ssdp.manufacturer != null) 'manufacturer': ssdp.manufacturer,
+        if (ssdp.modelName != null) 'modelName': ssdp.modelName,
+        if (ssdp.udn != null) 'udn': ssdp.udn,
+      },
+      lastSeenAt: DateTime.now(),
+    );
+  }
+
+  /// Enriches a device with UPnP description data.
+  LocalDevice enrichWithUpnp({
+    required LocalDevice device,
+    required UpnpDeviceDescription description,
+  }) {
+    return device.copyWith(
+      displayName: description.friendlyName ?? device.displayName,
+      type: _inferTypeFromUpnp(description, device.type),
+      capabilities: {
+        ...device.capabilities,
+        ..._inferCapabilitiesFromUpnp(description),
+      },
+      metadata: {
+        ...device.metadata,
+        'upnpUdn': description.udn,
+        if (description.manufacturer != null)
+          'manufacturer': description.manufacturer,
+        if (description.modelName != null) 'modelName': description.modelName,
+        if (description.modelNumber != null)
+          'modelNumber': description.modelNumber,
+        if (description.serialNumber != null)
+          'serialNumber': description.serialNumber,
+        if (description.presentationUrl != null)
+          'presentationUrl': description.presentationUrl,
+        'upnpServices':
+            description.services.map((s) => s.serviceType).toList(),
+      },
+      lastSeenAt: DateTime.now(),
+    );
+  }
+
+  String _deviceKey(LocalDevice device) {
+    // Use UDN if available, otherwise hostname, otherwise ID.
+    final udn = device.metadata['udn'] as String?;
+    if (udn != null) return 'udn:$udn';
+
+    if (device.hostname != null) return 'host:${device.hostname}';
+
+    // Try to match by display name for same-host devices.
+    return 'id:${device.id}';
+  }
+
+  LocalDevice _merge(LocalDevice a, LocalDevice b) {
+    // Merge addresses.
+    final addresses = <InternetAddressValue>{...a.addresses, ...b.addresses};
+
+    // Merge services.
+    final services = <LocalService>{...a.services, ...b.services};
+
+    // Merge discoveredBy.
+    final discoveredBy = <LocalDiscoveryProtocol>{...a.discoveredBy, ...b.discoveredBy};
+
+    // Merge capabilities.
+    final capabilities = <LocalDeviceCapability>{...a.capabilities, ...b.capabilities};
+
+    // Merge metadata.
+    final metadata = <String, Object?>{...a.metadata, ...b.metadata};
+
+    // Use the more recent lastSeenAt.
+    final lastSeenAt =
+        a.lastSeenAt.isAfter(b.lastSeenAt) ? a.lastSeenAt : b.lastSeenAt;
+
+    // Use the earlier firstSeenAt.
+    final firstSeenAt =
+        a.firstSeenAt.isBefore(b.firstSeenAt) ? a.firstSeenAt : b.firstSeenAt;
+
+    // Use higher confidence.
+    final confidence = a.confidence > b.confidence ? a.confidence : b.confidence;
+
+    return LocalDevice(
+      id: a.id,
+      displayName: a.displayName.isNotEmpty ? a.displayName : b.displayName,
+      hostname: a.hostname ?? b.hostname,
+      addresses: addresses,
+      services: services,
+      type: a.type != LocalDeviceType.unknown ? a.type : b.type,
+      capabilities: capabilities,
+      identity: a.identity,
+      discoveredBy: discoveredBy,
+      firstSeenAt: firstSeenAt,
+      lastSeenAt: lastSeenAt,
+      confidence: confidence,
+      metadata: metadata,
+    );
+  }
+
+  String? _extractHostFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.host;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  LocalDeviceType _inferTypeFromSsdp(SsdpDevice ssdp) {
+    final st = ssdp.searchTarget.toLowerCase();
+    if (st.contains('mediarenderer') || st.contains('mediaplayer')) {
+      return LocalDeviceType.smartTv;
+    }
+    if (st.contains('mediaserver')) {
+      return LocalDeviceType.nas;
+    }
+    if (st.contains('internetgatewaydevice') || st.contains('router')) {
+      return LocalDeviceType.router;
+    }
+    if (st.contains('printer')) {
+      return LocalDeviceType.printer;
+    }
+    if (st.contains('camera') || st.contains('onvif')) {
+      return LocalDeviceType.camera;
+    }
+    return LocalDeviceType.unknown;
+  }
+
+  Set<LocalDeviceCapability> _inferCapabilitiesFromSsdp(SsdpDevice ssdp) {
+    final caps = <LocalDeviceCapability>{};
+    final st = ssdp.searchTarget.toLowerCase();
+
+    if (st.contains('mediarenderer')) {
+      caps.add(LocalDeviceCapability.mediaPlayback);
+      caps.add(LocalDeviceCapability.streaming);
+    }
+    if (st.contains('mediaserver')) {
+      caps.add(LocalDeviceCapability.fileSharing);
+    }
+    if (st.contains('printer')) {
+      caps.add(LocalDeviceCapability.printing);
+    }
+    if (st.contains('internetgateway')) {
+      caps.add(LocalDeviceCapability.routing);
+    }
+
+    return caps;
+  }
+
+  LocalDeviceType _inferTypeFromUpnp(
+    UpnpDeviceDescription desc,
+    LocalDeviceType current,
+  ) {
+    if (current != LocalDeviceType.unknown) return current;
+
+    final dt = desc.deviceType?.toLowerCase() ?? '';
+    if (dt.contains('mediarenderer')) return LocalDeviceType.smartTv;
+    if (dt.contains('mediaserver')) return LocalDeviceType.nas;
+    if (dt.contains('internetgateway')) return LocalDeviceType.router;
+    if (dt.contains('printer')) return LocalDeviceType.printer;
+
+    return LocalDeviceType.unknown;
+  }
+
+  Set<LocalDeviceCapability> _inferCapabilitiesFromUpnp(
+    UpnpDeviceDescription desc,
+  ) {
+    final caps = <LocalDeviceCapability>{};
+
+    for (final service in desc.services) {
+      final st = service.serviceType.toLowerCase();
+      if (st.contains('renderingcontrol') || st.contains('avtransport')) {
+        caps.add(LocalDeviceCapability.mediaPlayback);
+        caps.add(LocalDeviceCapability.streaming);
+      }
+      if (st.contains('contentdirectory')) {
+        caps.add(LocalDeviceCapability.fileSharing);
+      }
+      if (st.contains('print')) {
+        caps.add(LocalDeviceCapability.printing);
+      }
+    }
+
+    return caps;
+  }
+}

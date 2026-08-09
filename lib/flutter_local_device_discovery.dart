@@ -5,6 +5,7 @@ export 'src/discovery/local_discovery_mode.dart';
 export 'src/discovery/local_discovery_protocol.dart';
 export 'src/discovery/local_discovery_request.dart';
 export 'src/discovery/local_discovery_session.dart';
+export 'src/discovery/device_aggregator.dart';
 
 export 'src/models/internet_address_value.dart';
 export 'src/models/local_device.dart';
@@ -13,5 +14,9 @@ export 'src/models/local_device_identity.dart';
 export 'src/models/local_device_type.dart';
 export 'src/models/local_network_interface.dart';
 export 'src/models/local_service.dart';
+export 'src/models/ssdp_device.dart';
+export 'src/models/upnp_device_description.dart';
+export 'src/models/capability_evidence.dart';
+export 'src/models/metadata_security_policy.dart';
 
 export 'src/utils/service_type_validator.dart';

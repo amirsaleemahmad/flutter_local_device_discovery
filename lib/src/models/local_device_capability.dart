@@ -65,4 +65,13 @@ enum LocalDeviceCapability {
 
   /// Custom service.
   customService,
+
+  /// Media playback (rendering).
+  mediaPlayback,
+
+  /// General streaming capability.
+  streaming,
+
+  /// Routing/gateway capability.
+  routing,
 }
