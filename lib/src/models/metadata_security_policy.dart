@@ -5,6 +5,7 @@ class MetadataSecurityPolicy {
     this.maxResponseSizeBytes = 256 * 1024,
     this.timeoutDuration = const Duration(seconds: 5),
     this.allowExternalAddresses = false,
+    this.allowLoopbackAddresses = false,
     this.disableXmlExternalEntities = true,
     this.maxXmlNestingDepth = 50,
   });
@@ -22,6 +23,11 @@ class MetadataSecurityPolicy {
   /// Defaults to false for security.
   final bool allowExternalAddresses;
 
+  /// Whether metadata may be fetched from this app's loopback interface.
+  /// Defaults to false to prevent a discovered device from targeting local
+  /// development servers or other processes on the client machine.
+  final bool allowLoopbackAddresses;
+
   /// Whether to disable XML external entity (XXE) processing.
   /// Defaults to true for security.
   final bool disableXmlExternalEntities;
@@ -30,12 +36,11 @@ class MetadataSecurityPolicy {
   final int maxXmlNestingDepth;
 
   /// Default security policy.
-  static const MetadataSecurityPolicy defaultPolicy =
-      MetadataSecurityPolicy();
+  static const MetadataSecurityPolicy defaultPolicy = MetadataSecurityPolicy();
 
   @override
-  String toString() =>
-      'MetadataSecurityPolicy(maxRedirects: $maxRedirects, '
+  String toString() => 'MetadataSecurityPolicy(maxRedirects: $maxRedirects, '
       'maxSize: ${maxResponseSizeBytes}B, timeout: ${timeoutDuration.inSeconds}s, '
-      'allowExternal: $allowExternalAddresses)';
+      'allowExternal: $allowExternalAddresses, '
+      'allowLoopback: $allowLoopbackAddresses)';
 }

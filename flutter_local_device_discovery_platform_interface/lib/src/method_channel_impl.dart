@@ -17,10 +17,8 @@ class MethodChannelFlutterLocalDeviceDiscovery
     extends FlutterLocalDeviceDiscoveryPlatform {
   /// Creates a new [MethodChannelFlutterLocalDeviceDiscovery].
   MethodChannelFlutterLocalDeviceDiscovery({MethodChannel? channel})
-      : _channel = channel ??
-            const MethodChannel(
-              'flutter_local_device_discovery',
-            );
+      : _channel =
+            channel ?? const MethodChannel('flutter_local_device_discovery');
 
   final MethodChannel _channel;
 
@@ -78,11 +76,16 @@ class MethodChannelFlutterLocalDeviceDiscovery
 
   @override
   Stream<NativeDiscoveryEvent> eventsForSession(String sessionId) {
-    return _globalEventStream ??= _eventChannel
+    final global = _globalEventStream ??= _eventChannel
         .receiveBroadcastStream()
-        .map((event) => NativeDiscoveryEvent.fromMap(
-              event as Map<Object?, Object?>,
-            ));
+        .map(
+          (event) =>
+              NativeDiscoveryEvent.fromMap(event as Map<Object?, Object?>),
+        )
+        .asBroadcastStream();
+    return global.where(
+      (event) => event.sessionId == null || event.sessionId == sessionId,
+    );
   }
 
   @override

@@ -54,7 +54,6 @@ class NativeNetworkInterface {
     return const {};
   }
 
-
   static NativeNetworkInterface fromMap(Map<Object?, Object?> map) {
     final rawAddresses = map['addresses'] as List<Object?>? ?? const [];
     return NativeNetworkInterface(
@@ -63,7 +62,9 @@ class NativeNetworkInterface {
       displayName: map['displayName'] as String?,
       type: map['type']! as int,
       addresses: rawAddresses
-          .map((a) => NativeInternetAddress.fromMap(a! as Map<Object?, Object?>))
+          .map(
+            (a) => NativeInternetAddress.fromMap(a! as Map<Object?, Object?>),
+          )
           .toList(),
       isUp: map['isUp'] as bool? ?? false,
       isDefault: map['isDefault'] as bool? ?? false,

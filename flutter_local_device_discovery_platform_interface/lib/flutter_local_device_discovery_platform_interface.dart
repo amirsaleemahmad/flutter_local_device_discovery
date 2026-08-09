@@ -1,3 +1,6 @@
+/// Platform contracts and native models for local device discovery.
+library;
+
 export 'src/platform_interface.dart';
 export 'src/method_channel_impl.dart';
 export 'src/models/native_discovery_request.dart';

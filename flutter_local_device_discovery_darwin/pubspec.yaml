@@ -5,21 +5,21 @@ description: >
 version: 0.2.0
 homepage: https://github.com/amirsaleemahmad/flutter_local_device_discovery
 repository: https://github.com/amirsaleemahmad/flutter_local_device_discovery.git
+issue_tracker: https://github.com/amirsaleemahmad/flutter_local_device_discovery/issues
 
 environment:
-  sdk: ^3.12.2
-  flutter: ">=3.22.0"
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
 
 dependencies:
   flutter:
     sdk: flutter
   flutter_local_device_discovery_platform_interface: ^0.2.0
-  plugin_platform_interface: ^2.1.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   plugin:
@@ -32,3 +32,10 @@ flutter:
         pluginClass: FlutterLocalDeviceDiscoveryPlugin
         sharedDarwinSource: true
         swiftPackage: true
+
+topics:
+  - device-discovery
+  - mdns
+  - bonjour
+  - ios
+  - macos

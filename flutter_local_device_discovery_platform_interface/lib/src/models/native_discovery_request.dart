@@ -101,10 +101,9 @@ class NativeDiscoveryRequest {
           (map['ssdpSearchTargets'] as List<Object?>? ?? const [])
               .whereType<String>()
               .toList(),
-      wsDiscoveryTypes:
-          (map['wsDiscoveryTypes'] as List<Object?>? ?? const [])
-              .whereType<String>()
-              .toList(),
+      wsDiscoveryTypes: (map['wsDiscoveryTypes'] as List<Object?>? ?? const [])
+          .whereType<String>()
+          .toList(),
       durationMilliseconds: map['durationMilliseconds'] as int? ?? 8000,
       resolveTimeoutMilliseconds:
           map['resolveTimeoutMilliseconds'] as int? ?? 3000,

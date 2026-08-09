@@ -1,6 +1,7 @@
 import '../models/local_device.dart';
 import '../models/local_device_capability.dart';
 import '../models/local_device_type.dart';
+import '../models/metadata_security_policy.dart';
 import '../utils/service_type_validator.dart';
 import 'local_discovery_mode.dart';
 import 'local_discovery_protocol.dart';
@@ -32,6 +33,9 @@ class LocalDiscoveryRequest {
     this.deduplicateResults = true,
     this.classifyDevices = true,
     this.monitorNetworkChanges = true,
+    this.metadataSecurityPolicy = MetadataSecurityPolicy.defaultPolicy,
+    this.maxDevices = 100,
+    this.maxServices = 500,
     this.safePortProbe,
     this.hostDiscovery,
     this.filter,
@@ -50,7 +54,10 @@ class LocalDiscoveryRequest {
   /// The SSDP search targets to use.
   final Set<String> ssdpSearchTargets;
 
-  /// The WS-Discovery types to probe for.
+  /// Reserved WS-Discovery types.
+  ///
+  /// WS-Discovery is not implemented in v0.2.0. Supplying values does not
+  /// enable discovery unless a future platform implementation advertises it.
   final Set<String> wsDiscoveryTypes;
 
   /// The maximum duration of a snapshot discovery.
@@ -101,10 +108,23 @@ class LocalDiscoveryRequest {
   /// Whether to monitor network changes.
   final bool monitorNetworkChanges;
 
-  /// Optional safe port probe configuration.
+  /// Security limits applied to UPnP description downloads and XML parsing.
+  final MetadataSecurityPolicy metadataSecurityPolicy;
+
+  /// Maximum number of devices retained by a session.
+  final int maxDevices;
+
+  /// Maximum number of services retained by a session.
+  final int maxServices;
+
+  /// Reserved safe-port-probe configuration.
+  ///
+  /// Safe port probing is not implemented in v0.2.0.
   final SafePortProbeConfig? safePortProbe;
 
-  /// Optional host discovery configuration.
+  /// Reserved host-discovery configuration.
+  ///
+  /// Neighbor-table and reachability discovery are not implemented in v0.2.0.
   final HostDiscoveryConfig? hostDiscovery;
 
   /// Optional device filter.
@@ -117,6 +137,9 @@ class LocalDiscoveryRequest {
   ///
   /// Throws an [ArgumentError] if the request is invalid.
   void validate() {
+    if (protocols.isEmpty) {
+      throw ArgumentError('at least one discovery protocol is required');
+    }
     if (duration <= Duration.zero) {
       throw ArgumentError('duration must be positive');
     }
@@ -129,15 +152,35 @@ class LocalDiscoveryRequest {
     if (lostDeviceGracePeriod < Duration.zero) {
       throw ArgumentError('lostDeviceGracePeriod must not be negative');
     }
+    if (maxDevices <= 0) {
+      throw ArgumentError('maxDevices must be positive');
+    }
+    if (maxServices <= 0) {
+      throw ArgumentError('maxServices must be positive');
+    }
+    if (metadataSecurityPolicy.maxRedirects < 0 ||
+        metadataSecurityPolicy.maxResponseSizeBytes <= 0 ||
+        metadataSecurityPolicy.timeoutDuration <= Duration.zero ||
+        metadataSecurityPolicy.maxXmlNestingDepth <= 0) {
+      throw ArgumentError('metadataSecurityPolicy contains invalid limits');
+    }
     for (final serviceType in serviceTypes) {
       if (!ServiceTypeValidator.isValid(serviceType)) {
         throw ArgumentError('Invalid service type: $serviceType');
       }
     }
+    for (final target in ssdpSearchTargets) {
+      if (target.trim().isEmpty ||
+          target.length > 512 ||
+          target.contains('\r') ||
+          target.contains('\n')) {
+        throw ArgumentError('Invalid SSDP search target: $target');
+      }
+    }
   }
 }
 
-/// Configuration for safe port probing.
+/// Reserved configuration for safe port probing in a future release.
 class SafePortProbeConfig {
   const SafePortProbeConfig({
     this.ports = const <int>[],
@@ -159,7 +202,7 @@ class SafePortProbeConfig {
   final int maxConcurrentProbes;
 }
 
-/// Configuration for host discovery.
+/// Reserved configuration for host discovery in a future release.
 class HostDiscoveryConfig {
   const HostDiscoveryConfig({
     this.enabled = false,
@@ -242,7 +285,9 @@ class DeviceFilter {
       return false;
     }
     if (ports != null &&
-        !device.services.any((s) => s.port != null && ports!.contains(s.port))) {
+        !device.services.any(
+          (s) => s.port != null && ports!.contains(s.port),
+        )) {
       return false;
     }
     if (predicate != null && !predicate!(device)) return false;

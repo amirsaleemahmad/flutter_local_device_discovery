@@ -8,7 +8,8 @@ import 'package:flutter_local_device_discovery_platform_interface/flutter_local_
 /// Web browsers do not support native mDNS/DNS-SD/Bonjour discovery.
 /// This implementation provides graceful degradation with clear
 /// capability reporting so applications can handle web gracefully.
-class WebFlutterLocalDeviceDiscovery extends FlutterLocalDeviceDiscoveryPlatform {
+class WebFlutterLocalDeviceDiscovery
+    extends FlutterLocalDeviceDiscoveryPlatform {
   /// Registers the web implementation as the platform instance.
   static void registerWith() {
     if (kIsWeb) {
@@ -45,15 +46,11 @@ class WebFlutterLocalDeviceDiscovery extends FlutterLocalDeviceDiscoveryPlatform
   ) async {
     return const NativeDiscoveryReadiness(
       canStart: false,
-      requirements: <String>[
-        'web_unsupported',
-      ],
+      requirements: <String>['web_unsupported'],
       warnings: <String>[
         'Web browsers do not support native mDNS/DNS-SD discovery.',
       ],
-      platformDetails: <String, Object?>{
-        'platform': 'web',
-      },
+      platformDetails: <String, Object?>{'platform': 'web'},
     );
   }
 
@@ -89,9 +86,7 @@ class WebFlutterLocalDeviceDiscovery extends FlutterLocalDeviceDiscoveryPlatform
   Future<NativeServiceRegistrationResult> registerService(
     NativeServiceRegistration request,
   ) async {
-    throw UnsupportedError(
-      'Service registration is not supported on web.',
-    );
+    throw UnsupportedError('Service registration is not supported on web.');
   }
 
   @override
@@ -110,7 +105,7 @@ class WebFlutterLocalDeviceDiscovery extends FlutterLocalDeviceDiscoveryPlatform
   @override
   Future<NativeDiscoveryDiagnostics> getDiagnostics() async {
     return const NativeDiscoveryDiagnostics(
-      pluginVersion: '0.1.0',
+      pluginVersion: '0.2.0',
       platformVersion: 'web',
       supportedProtocols: <int>[],
       activeSessions: 0,
@@ -126,9 +121,7 @@ class WebFlutterLocalDeviceDiscovery extends FlutterLocalDeviceDiscoveryPlatform
       warnings: <String>[
         'Web browsers do not support native mDNS/DNS-SD discovery.',
       ],
-      platformDetails: <String, Object?>{
-        'platform': 'web',
-      },
+      platformDetails: <String, Object?>{'platform': 'web'},
     );
   }
 }

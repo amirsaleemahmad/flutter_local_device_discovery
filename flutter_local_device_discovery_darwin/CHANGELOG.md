@@ -1,9 +1,13 @@
-## 0.2.0
+## 0.2.0 - 2026-08-09
 
-* Updated version to 0.2.0 for federated plugin alignment.
+* Aligned the iOS and macOS implementation with platform interface 0.2.0.
+* Browses only the Bonjour service types explicitly requested by the application.
+* Accepts resolved IPv6 endpoints instead of requiring IPv4.
+* Added the shared-Darwin Swift Package Manager layout used by Flutter 3.44 and later.
+* Retained a CocoaPods fallback that uses the same canonical Swift source.
+* Updated native diagnostic version reporting to 0.2.0.
 
-## 0.1.0
+## 0.1.0 - 2026-08-06
 
-* Initial release of the Apple platform implementation of flutter_local_device_discovery.
-* Uses Apple's Network framework (NWBrowser) for mDNS/DNS-SD/Bonjour.
-* Supports Swift Package Manager.
+* Initial iOS and macOS implementation.
+* Added mDNS/DNS-SD/Bonjour browsing with Apple's Network framework.

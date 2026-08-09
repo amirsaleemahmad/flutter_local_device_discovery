@@ -1,17 +1,29 @@
-# flutter_local_device_discovery_example
+# flutter_local_device_discovery v0.2 review app
 
-A new Flutter project.
+This example is an interactive review console for the plugin's v0.2 discovery pipeline.
 
-## Getting Started
+It requires Flutter 3.24 or later and Dart 3.5 or later.
 
-This project is a starting point for a Flutter application.
+It can exercise:
 
-A few resources to get you started if this is your first Flutter project:
+- Native mDNS/DNS-SD/Bonjour browsing and resolution
+- SSDP active searches and passive notifications
+- Secure UPnP description fetching and parsing
+- Device deduplication across protocols
+- Device classification, inferred capabilities, and capability evidence
+- Live add/update/remove events
+- Readiness checks, warnings, and diagnostics
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Run it on a native target:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter pub get
+flutter run -d android
+flutter run -d ios
+flutter run -d macos
+flutter run -d windows
+```
+
+The browser target intentionally reports discovery as unsupported because web pages cannot open the required multicast sockets.
+
+Apple builds declare the service types shown in the review app through `NSBonjourServices`. Applications should declare only the service types they actually browse. macOS also requires client/server network sandbox entitlements for active searches and passive SSDP notifications.

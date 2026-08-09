@@ -1,7 +1,16 @@
-# Files to exclude from pub.dev package
+# Maintainer and local-development files.
 PROMPT.md
+pubspec.lock
+pubspec_overrides.yaml
+**/pubspec_overrides.yaml
+*.iml
+*.log
+*.swp
+
+# Generated output.
 build/
+coverage/
+doc/api/
 example/testResult.json
 example/android/build/
 example/build/
-*.iml

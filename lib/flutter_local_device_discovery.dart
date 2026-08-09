@@ -1,3 +1,6 @@
+/// Local-network device and service discovery for Flutter.
+library;
+
 export 'src/discovery/flutter_local_device_discovery.dart';
 export 'src/discovery/local_discovery_capabilities.dart';
 export 'src/discovery/local_discovery_event.dart';
@@ -18,5 +21,8 @@ export 'src/models/ssdp_device.dart';
 export 'src/models/upnp_device_description.dart';
 export 'src/models/capability_evidence.dart';
 export 'src/models/metadata_security_policy.dart';
+export 'src/upnp/upnp_description_fetcher.dart';
+export 'src/upnp/upnp_description_parser.dart';
+export 'src/ssdp/ssdp_message.dart';
 
 export 'src/utils/service_type_validator.dart';

@@ -15,9 +15,21 @@ void main() {
     });
 
     test('equality is based on usn and location', () {
-      const a = SsdpDevice(location: 'http://1.1.1.1', usn: 'uuid:1', searchTarget: 'ssdp:all');
-      const b = SsdpDevice(location: 'http://1.1.1.1', usn: 'uuid:1', searchTarget: 'ssdp:all');
-      const c = SsdpDevice(location: 'http://2.2.2.2', usn: 'uuid:2', searchTarget: 'ssdp:all');
+      const a = SsdpDevice(
+        location: 'http://1.1.1.1',
+        usn: 'uuid:1',
+        searchTarget: 'ssdp:all',
+      );
+      const b = SsdpDevice(
+        location: 'http://1.1.1.1',
+        usn: 'uuid:1',
+        searchTarget: 'ssdp:all',
+      );
+      const c = SsdpDevice(
+        location: 'http://2.2.2.2',
+        usn: 'uuid:2',
+        searchTarget: 'ssdp:all',
+      );
       expect(a, equals(b));
       expect(a, isNot(equals(c)));
     });
@@ -65,6 +77,7 @@ void main() {
       const policy = MetadataSecurityPolicy.defaultPolicy;
       expect(policy.maxRedirects, 3);
       expect(policy.allowExternalAddresses, false);
+      expect(policy.allowLoopbackAddresses, false);
       expect(policy.disableXmlExternalEntities, true);
     });
   });
@@ -110,13 +123,21 @@ void main() {
         searchTarget: 'upnp:rootdevice',
         friendlyName: 'My UPnP Device',
       );
-      final merged = aggregator.mergeSsdpDevice(existing: existing, ssdp: ssdp, discoveredBy: 'ssdp');
+      final merged = aggregator.mergeSsdpDevice(
+        existing: existing,
+        ssdp: ssdp,
+        discoveredBy: 'ssdp',
+      );
       expect(merged.displayName, 'My UPnP Device');
       expect(merged.metadata['ssdpLocation'], 'http://192.168.1.1/desc.xml');
     });
 
     test('enriches device with UPnP description', () {
-      final device = LocalDevice(id: '1', displayName: 'Old Name', hostname: 'myhost.local');
+      final device = LocalDevice(
+        id: '1',
+        displayName: 'Old Name',
+        hostname: 'myhost.local',
+      );
       const desc = UpnpDeviceDescription(
         udn: 'uuid:1234',
         friendlyName: 'New Friendly Name',
@@ -128,17 +149,30 @@ void main() {
           ),
         ],
       );
-      final enriched = aggregator.enrichWithUpnp(device: device, description: desc);
+      final enriched = aggregator.enrichWithUpnp(
+        device: device,
+        description: desc,
+      );
       expect(enriched.displayName, 'New Friendly Name');
       expect(enriched.metadata['upnpUdn'], 'uuid:1234');
-      expect(enriched.capabilities, contains(LocalDeviceCapability.mediaPlayback));
+      expect(
+        enriched.capabilities,
+        contains(LocalDeviceCapability.mediaPlayback),
+      );
     });
   });
 
   group('LocalDevice copyWith', () {
     test('copies with updated fields', () {
-      final device = LocalDevice(id: '1', displayName: 'Original', type: LocalDeviceType.unknown);
-      final copied = device.copyWith(displayName: 'Updated', type: LocalDeviceType.smartTv);
+      final device = LocalDevice(
+        id: '1',
+        displayName: 'Original',
+        type: LocalDeviceType.unknown,
+      );
+      final copied = device.copyWith(
+        displayName: 'Updated',
+        type: LocalDeviceType.smartTv,
+      );
       expect(copied.id, '1');
       expect(copied.displayName, 'Updated');
       expect(copied.type, LocalDeviceType.smartTv);

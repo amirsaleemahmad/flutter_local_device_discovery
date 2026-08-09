@@ -33,7 +33,8 @@ class UpnpDeviceDescription {
   final List<UpnpDeviceDescription> embeddedDevices;
 
   @override
-  String toString() => 'UpnpDeviceDescription(udn: $udn, friendlyName: $friendlyName)';
+  String toString() =>
+      'UpnpDeviceDescription(udn: $udn, friendlyName: $friendlyName)';
 }
 
 class UpnpIcon {

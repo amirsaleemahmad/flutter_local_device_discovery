@@ -19,6 +19,26 @@ class CapabilityEvidence {
   /// Optional human-readable detail.
   final String? detail;
 
+  /// Converts this evidence to a JSON-compatible map.
+  Map<String, Object?> toMap() => <String, Object?>{
+        'capability': capability,
+        'source': source,
+        'confidence': confidence,
+        if (detail != null) 'detail': detail,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CapabilityEvidence &&
+          other.capability == capability &&
+          other.source == source &&
+          other.confidence == confidence &&
+          other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(capability, source, confidence, detail);
+
   @override
   String toString() =>
       'CapabilityEvidence($capability from $source, confidence: $confidence)';

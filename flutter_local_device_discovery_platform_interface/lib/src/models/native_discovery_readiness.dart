@@ -28,7 +28,6 @@ class NativeDiscoveryReadiness {
     return const {};
   }
 
-
   static NativeDiscoveryReadiness fromMap(Map<Object?, Object?> map) {
     return NativeDiscoveryReadiness(
       canStart: map['canStart'] as bool? ?? false,

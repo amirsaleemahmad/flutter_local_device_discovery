@@ -1,4 +1,5 @@
 import 'internet_address_value.dart';
+import 'capability_evidence.dart';
 import 'local_device_capability.dart';
 import 'local_device_identity.dart';
 import 'local_device_type.dart';
@@ -17,6 +18,7 @@ class LocalDevice {
     this.services = const <LocalService>[],
     this.type = LocalDeviceType.unknown,
     this.capabilities = const <LocalDeviceCapability>{},
+    this.capabilityEvidence = const <CapabilityEvidence>[],
     this.identity = const LocalDeviceIdentity(),
     this.vendor,
     this.reachability = const LocalDeviceReachability.unknown(),
@@ -51,6 +53,9 @@ class LocalDevice {
 
   /// The inferred capabilities of this device.
   final Set<LocalDeviceCapability> capabilities;
+
+  /// Evidence used to infer this device's capabilities and type.
+  final List<CapabilityEvidence> capabilityEvidence;
 
   /// Identity information for this device.
   final LocalDeviceIdentity identity;
@@ -110,6 +115,7 @@ class LocalDevice {
     List<LocalService>? services,
     LocalDeviceType? type,
     Set<LocalDeviceCapability>? capabilities,
+    List<CapabilityEvidence>? capabilityEvidence,
     LocalDeviceIdentity? identity,
     LocalDeviceVendor? vendor,
     LocalDeviceReachability? reachability,
@@ -129,6 +135,7 @@ class LocalDevice {
       services: services ?? this.services,
       type: type ?? this.type,
       capabilities: capabilities ?? this.capabilities,
+      capabilityEvidence: capabilityEvidence ?? this.capabilityEvidence,
       identity: identity ?? this.identity,
       vendor: vendor ?? this.vendor,
       reachability: reachability ?? this.reachability,

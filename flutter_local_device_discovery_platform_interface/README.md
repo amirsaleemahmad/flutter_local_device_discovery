@@ -1,11 +1,16 @@
 # flutter_local_device_discovery_platform_interface
 
-A common platform interface for the [`flutter_local_device_discovery`](https://github.com/amirsaleemahmad/flutter_local_device_discovery) plugin.
+Platform interface for [`flutter_local_device_discovery`](https://pub.dev/packages/flutter_local_device_discovery).
 
-## Usage
+The package defines the method-channel contract and serializable native models used by the Android, Darwin, and Windows implementations. App developers should depend on the main package rather than this package directly.
 
-This package is the platform interface for the `flutter_local_device_discovery` plugin. It should not be used directly. Instead, use the `flutter_local_device_discovery` package.
+Platform implementers should extend `FlutterLocalDeviceDiscoveryPlatform` and use `PlatformInterface.verifyToken` through the provided instance setter.
+
+## Requirements
+
+- Flutter 3.24 or later
+- Dart 3.5 or later
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

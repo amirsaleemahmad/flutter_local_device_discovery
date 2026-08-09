@@ -4,7 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | ✅                 |
+| 0.2.x   | ✅                 |
+| 0.1.x   | Security fixes only |
 
 ## Reporting a Vulnerability
 
@@ -32,7 +33,7 @@ This package discovers and describes devices on the local network. It is **not**
 
 ### What This Package Does
 
-- Discovers devices and services using standard protocols (mDNS, DNS-SD, Bonjour, SSDP, UPnP, WS-Discovery)
+- Discovers devices and services using standard protocols (mDNS, DNS-SD, Bonjour, SSDP, and UPnP)
 - Resolves service addresses and ports
 - Parses TXT records and device metadata
 - Classifies devices based on observable information
@@ -52,11 +53,13 @@ This package discovers and describes devices on the local network. It is **not**
 
 1. **All local-network data is treated as untrusted.** Malformed packets, XML, and metadata must never crash the plugin or cause unsafe behavior.
 
-2. **Metadata fetching is bounded.** UPnP and WS-Discovery metadata fetches are time-limited, size-limited, redirect-limited, and cancellable.
+2. **Metadata fetching is bounded.** UPnP metadata fetches are time-limited, size-limited, redirect-limited, and cancellable.
 
 3. **XML parsing is secure.** External entity resolution is disabled. XML entity expansion and excessive nesting are prevented.
 
 4. **No SSRF.** Metadata is only fetched from local addresses by default. Internet URL redirection from local devices is blocked.
+
+   Connections are pinned to a validated address. Public and loopback targets are blocked by default, including after redirects.
 
 5. **No telemetry.** The package contains no analytics SDK, no telemetry, and no data uploads.
 
@@ -97,15 +100,6 @@ Applications using this package need the following permissions:
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 ```
-
-### Safe Port Probing
-
-If enabled, port probing is restricted to:
-- A small configurable port list
-- Local/private/link-local addresses by default
-- Small concurrency limits
-- Per-host and global timeouts
-- No banner exploitation or authentication attempts
 
 ## Acknowledgments
 

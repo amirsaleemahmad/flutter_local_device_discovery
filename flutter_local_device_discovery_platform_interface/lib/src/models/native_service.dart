@@ -73,7 +73,6 @@ class NativeService {
     return const {};
   }
 
-
   static NativeService fromMap(Map<Object?, Object?> map) {
     final rawAddresses = map['addresses'] as List<Object?>? ?? const [];
     final rawTxt = map['rawTxtRecords'] as Map<Object?, Object?>? ?? const {};
@@ -100,7 +99,9 @@ class NativeService {
       domain: map['domain']! as String,
       hostname: map['hostname'] as String?,
       addresses: rawAddresses
-          .map((a) => NativeInternetAddress.fromMap(a! as Map<Object?, Object?>))
+          .map(
+            (a) => NativeInternetAddress.fromMap(a! as Map<Object?, Object?>),
+          )
           .toList(),
       port: map['port'] as int?,
       transport: map['transport']! as int,

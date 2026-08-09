@@ -2,7 +2,7 @@
 
 #include <flutter/event_channel.h>
 #include <flutter/event_sink.h>
-#include <flutter/event_stream_handler_functions.h>
+#include <flutter/event_stream_handler.h>
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
 
@@ -26,6 +26,31 @@ namespace {
 using flutter::EncodableList;
 using flutter::EncodableMap;
 using flutter::EncodableValue;
+
+// Windows v0.2 discovery is provided by the shared Dart SSDP engine. Keep an
+// event channel registered so sessions can combine that engine with the native
+// Windows foundation without receiving MissingPluginException.
+class EmptyEventStreamHandler
+    : public flutter::StreamHandler<flutter::EncodableValue> {
+ protected:
+  std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>>
+  OnListenInternal(
+      const flutter::EncodableValue* arguments,
+      std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& sink)
+      override {
+    sink_ = std::move(sink);
+    return nullptr;
+  }
+
+  std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>>
+  OnCancelInternal(const flutter::EncodableValue* arguments) override {
+    sink_.reset();
+    return nullptr;
+  }
+
+ private:
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> sink_;
+};
 
 // Event types matching the Dart-side enum.
 constexpr int kEventDiscoveryStarted = 0;
@@ -130,6 +155,13 @@ void FlutterLocalDeviceDiscoveryPlugin::RegisterWithRegistrar(
       registrar->messenger(), "flutter_local_device_discovery",
       &flutter::StandardMethodCodec::GetInstance());
 
+  auto event_channel =
+      std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
+          registrar->messenger(), "flutter_local_device_discovery/events",
+          &flutter::StandardMethodCodec::GetInstance());
+  event_channel->SetStreamHandler(
+      std::make_unique<EmptyEventStreamHandler>());
+
   auto plugin = std::make_unique<FlutterLocalDeviceDiscoveryPlugin>(
       registrar, std::move(channel));
 
@@ -159,6 +191,9 @@ void FlutterLocalDeviceDiscoveryPlugin::HandleMethodCall(
     HandleCheckReadiness(method_call, std::move(result));
   } else if (method == "startDiscovery") {
     HandleStartDiscovery(method_call, std::move(result));
+  } else if (method == "pauseDiscovery" || method == "resumeDiscovery") {
+    // The shared SSDP engine owns pause/resume behavior on Windows v0.2.
+    result->Success();
   } else if (method == "stopDiscovery") {
     HandleStopDiscovery(method_call, std::move(result));
   } else if (method == "getDiagnostics") {
@@ -172,7 +207,7 @@ void FlutterLocalDeviceDiscoveryPlugin::HandleGetCapabilities(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   EncodableMap capabilities;
   capabilities[EncodableValue("supportedProtocols")] =
-      EncodableValue(EncodableList{kProtocolMdns, kProtocolDnsSd});
+      EncodableValue(EncodableList());
   capabilities[EncodableValue("supportsServiceRegistration")] =
       EncodableValue(false);
   capabilities[EncodableValue("supportsIpv4")] = EncodableValue(true);
@@ -248,10 +283,10 @@ void FlutterLocalDeviceDiscoveryPlugin::HandleStopDiscovery(
 void FlutterLocalDeviceDiscoveryPlugin::HandleGetDiagnostics(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   EncodableMap diagnostics;
-  diagnostics[EncodableValue("pluginVersion")] = EncodableValue("0.1.0");
+  diagnostics[EncodableValue("pluginVersion")] = EncodableValue("0.2.0");
   diagnostics[EncodableValue("platformVersion")] = EncodableValue("windows");
   diagnostics[EncodableValue("supportedProtocols")] =
-      EncodableValue(EncodableList{kProtocolMdns, kProtocolDnsSd});
+      EncodableValue(EncodableList());
   diagnostics[EncodableValue("activeSessions")] =
       EncodableValue(static_cast<int>(sessions_.size()));
   diagnostics[EncodableValue("multicastAvailable")] = EncodableValue(true);

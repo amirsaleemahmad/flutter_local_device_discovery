@@ -49,46 +49,33 @@ class _DiscoveryRunnerAppState extends State<DiscoveryRunnerApp> {
       final result = await discovery.discover(
         const LocalDiscoveryRequest(
           duration: Duration(seconds: 15),
+          protocols: {
+            LocalDiscoveryProtocol.mdns,
+            LocalDiscoveryProtocol.dnsSd,
+            LocalDiscoveryProtocol.bonjour,
+            LocalDiscoveryProtocol.ssdp,
+            LocalDiscoveryProtocol.upnp,
+          },
+          ssdpSearchTargets: {'ssdp:all'},
+          fetchUpnpDescriptions: true,
           serviceTypes: {
             '_http._tcp',
-            '_https._tcp',
             '_ipp._tcp',
-            '_ipps._tcp',
             '_printer._tcp',
-            '_pdl-datastream._tcp',
-            '_scanner._tcp',
             '_airplay._tcp',
-            '_raop._tcp',
             '_googlecast._tcp',
-            '_googlezone._tcp',
-            '_spotify-connect._tcp',
-            '_sonos._tcp',
             '_ssh._tcp',
             '_smb._tcp',
-            '_ftp._tcp',
-            '_webdav._tcp',
-            '_nfs._tcp',
-            '_afpovertcp._tcp',
-            '_rfb._tcp',
-            '_companion-link._tcp',
-            '_homekit._tcp',
-            '_hap._tcp',
-            '_mediaremotetv._tcp',
-            '_touch-able._tcp',
-            '_device-info._tcp',
-            '_workstation._tcp',
-            '_airport._tcp',
-            '_adisk._tcp',
-            '_sleep-proxy._udp',
-            '_presence._tcp',
-            '_tls._tcp',
           },
           resolveServices: true,
         ),
       );
 
-      debugPrint('Discovery complete: ${result.devices.length} devices, '
-          '${result.services.length} services');
+      debugPrint(
+        'Discovery complete: ${result.devices.length} devices, '
+        '${result.services.length} services',
+      );
+      final diagnostics = await discovery.getDiagnostics();
       setState(() {
         _status = 'Discovery complete: ${result.devices.length} devices, '
             '${result.services.length} services. Saving results...';
@@ -97,16 +84,23 @@ class _DiscoveryRunnerAppState extends State<DiscoveryRunnerApp> {
       // Build the JSON output
       final output = <String, Object?>{
         'timestamp': DateTime.now().toIso8601String(),
+        'diagnostics': {
+          'pluginVersion': diagnostics.pluginVersion,
+          'rawObservationCount': diagnostics.rawObservationCount,
+          'deduplicatedDeviceCount': diagnostics.deduplicatedDeviceCount,
+          'metadataFetchCount': diagnostics.metadataFetchCount,
+          'resolutionSuccessCount': diagnostics.resolutionSuccessCount,
+          'resolutionFailureCount': diagnostics.resolutionFailureCount,
+          'warnings': diagnostics.warnings,
+        },
         'capabilities': {
-          'supportedProtocols': capabilities.supportedProtocols
-              .map((p) => p.name)
-              .toList(),
+          'supportedProtocols':
+              capabilities.supportedProtocols.map((p) => p.name).toList(),
           'supportsServiceRegistration':
               capabilities.supportsServiceRegistration,
           'supportsIpv4': capabilities.supportsIpv4,
           'supportsIpv6': capabilities.supportsIpv6,
-          'supportsMultipleInterfaces':
-              capabilities.supportsMultipleInterfaces,
+          'supportsMultipleInterfaces': capabilities.supportsMultipleInterfaces,
           'requiresLocalNetworkPermission':
               capabilities.requiresLocalNetworkPermission,
           'requiresMulticastPermission':
@@ -120,22 +114,33 @@ class _DiscoveryRunnerAppState extends State<DiscoveryRunnerApp> {
             'hostname': device.hostname,
             'type': device.type.name,
             'addresses': device.addresses
-                .map((a) => <String, Object?>{
-                      'address': a.address,
-                      'family': a.family,
-                      'scopeId': a.scopeId,
-                      'interfaceName': a.interfaceName,
-                      'isLoopback': a.isLoopback,
-                      'isLinkLocal': a.isLinkLocal,
-                      'isPrivate': a.isPrivate,
-                      'isMulticast': a.isMulticast,
-                    })
+                .map(
+                  (a) => <String, Object?>{
+                    'address': a.address,
+                    'family': a.family,
+                    'scopeId': a.scopeId,
+                    'interfaceName': a.interfaceName,
+                    'isLoopback': a.isLoopback,
+                    'isLinkLocal': a.isLinkLocal,
+                    'isPrivate': a.isPrivate,
+                    'isMulticast': a.isMulticast,
+                  },
+                )
                 .toList(),
             'services': device.services.map((s) => s.serviceType).toList(),
             'discoveredBy': device.discoveredBy.map((p) => p.name).toList(),
             'firstSeenAt': device.firstSeenAt?.toIso8601String(),
             'lastSeenAt': device.lastSeenAt?.toIso8601String(),
             'confidence': device.confidence,
+            'capabilities': device.capabilities.map((c) => c.name).toList(),
+            'capabilityEvidence':
+                device.capabilityEvidence.map((e) => e.toMap()).toList(),
+            'identity': {
+              'upnpUdn': device.identity.upnpUdn,
+              'manufacturer': device.identity.manufacturer,
+              'model': device.identity.model,
+              'serialNumber': device.identity.serialNumber,
+            },
             'metadata': device.metadata,
           };
         }).toList(),
@@ -149,12 +154,14 @@ class _DiscoveryRunnerAppState extends State<DiscoveryRunnerApp> {
             'port': service.port,
             'transport': service.transport.name,
             'addresses': service.addresses
-                .map((a) => <String, Object?>{
-                      'address': a.address,
-                      'family': a.family,
-                      'scopeId': a.scopeId,
-                      'interfaceName': a.interfaceName,
-                    })
+                .map(
+                  (a) => <String, Object?>{
+                    'address': a.address,
+                    'family': a.family,
+                    'scopeId': a.scopeId,
+                    'interfaceName': a.interfaceName,
+                  },
+                )
                 .toList(),
             'textTxtRecords': service.textTxtRecords,
             'discoveredBy': service.discoveredBy.map((p) => p.name).toList(),

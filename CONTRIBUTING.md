@@ -11,6 +11,7 @@ Thank you for your interest in contributing to `flutter_local_device_discovery`!
 - [Testing](#testing)
 - [Pull Request Process](#pull-request-process)
 - [Commit Message Guidelines](#commit-message-guidelines)
+- [Release Process](#release-process)
 - [Reporting Issues](#reporting-issues)
 - [License](#license)
 
@@ -97,7 +98,7 @@ flutter_local_device_discovery/
 ### Kotlin (Android)
 
 - Follow the [Kotlin Coding Conventions](https://kotlinlang.org/docs/coding-conventions.html)
-- Use coroutines for async operations
+- Use Android listener APIs without blocking the platform thread
 - Keep platform code minimal; push logic to Dart where possible
 
 ### Swift (iOS/macOS)
@@ -218,6 +219,27 @@ fix(ios): handle local network permission denial gracefully
 docs(readme): add Windows platform configuration section
 test(models): add tests for InternetAddressValue parsing
 ```
+
+## Release Process
+
+This repository contains five independently published packages. Keep their versions and hosted dependency constraints aligned before a release. Local path dependencies belong in `pubspec_overrides.yaml`; those files are excluded from the published archives.
+
+Before publishing:
+
+1. Update every package changelog and version.
+2. Run `flutter analyze` and `flutter test` from the repository root.
+3. Run `dart pub publish --dry-run` from each publishable package directory.
+4. Commit the complete release so Pub validates a clean Git state.
+
+Publish federated releases in dependency order, waiting for each stage to become available on pub.dev before continuing:
+
+1. `flutter_local_device_discovery_platform_interface`
+2. `flutter_local_device_discovery_android`
+3. `flutter_local_device_discovery_darwin`
+4. `flutter_local_device_discovery_windows`
+5. `flutter_local_device_discovery`
+
+Publishing is irreversible. Review the archive file list shown by each dry run before confirming the upload.
 
 ## Reporting Issues
 

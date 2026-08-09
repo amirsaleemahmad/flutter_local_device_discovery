@@ -26,6 +26,18 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app discovers devices and services available on your local network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_http._tcp</string>
+		<string>_ipp._tcp</string>
+		<string>_printer._tcp</string>
+		<string>_airplay._tcp</string>
+		<string>_googlecast._tcp</string>
+		<string>_ssh._tcp</string>
+		<string>_smb._tcp</string>
+	</array>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

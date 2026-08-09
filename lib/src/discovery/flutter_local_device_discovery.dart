@@ -4,12 +4,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_device_discovery_platform_interface/flutter_local_device_discovery_platform_interface.dart';
 
 import '../models/internet_address_value.dart';
-import '../web/web_impl.dart';
 import '../models/local_device.dart';
 import '../models/local_device_capability.dart';
 import '../models/local_device_identity.dart';
 import '../models/local_device_type.dart';
 import '../models/local_service.dart';
+import '../ssdp/ssdp_discovery_engine.dart';
+import '../web/web_impl.dart';
+import 'device_aggregator.dart';
 import 'local_discovery_capabilities.dart';
 import 'local_discovery_event.dart';
 import 'local_discovery_mode.dart';
@@ -21,20 +23,27 @@ import 'local_discovery_session.dart';
 class FlutterLocalDeviceDiscovery {
   /// Creates a new [FlutterLocalDeviceDiscovery] instance.
   FlutterLocalDeviceDiscovery() {
-    if (kIsWeb) {
-      WebFlutterLocalDeviceDiscovery.registerWith();
-    }
+    if (kIsWeb) WebFlutterLocalDeviceDiscovery.registerWith();
   }
+
+  static final _SharedDiscoveryDiagnostics _sharedDiagnostics =
+      _SharedDiscoveryDiagnostics();
 
   /// Returns the capabilities supported by the current platform.
   Future<LocalDiscoveryCapabilities> getCapabilities() async {
-    final native = await FlutterLocalDeviceDiscoveryPlatform.instance
-        .getCapabilities();
+    final native =
+        await FlutterLocalDeviceDiscoveryPlatform.instance.getCapabilities();
+    final protocols = native.supportedProtocols
+        .map(_protocolFromInt)
+        .whereType<LocalDiscoveryProtocol>()
+        .toSet();
+    if (!kIsWeb) {
+      protocols
+        ..add(LocalDiscoveryProtocol.ssdp)
+        ..add(LocalDiscoveryProtocol.upnp);
+    }
     return LocalDiscoveryCapabilities(
-      supportedProtocols: native.supportedProtocols
-          .map(_protocolFromInt)
-          .whereType<LocalDiscoveryProtocol>()
-          .toSet(),
+      supportedProtocols: protocols,
       supportsServiceRegistration: native.supportsServiceRegistration,
       supportsIpv4: native.supportsIpv4,
       supportsIpv6: native.supportsIpv6,
@@ -45,17 +54,16 @@ class FlutterLocalDeviceDiscovery {
       supportsSafePortProbe: native.supportsSafePortProbe,
       requiresLocalNetworkPermission: native.requiresLocalNetworkPermission,
       requiresMulticastPermission: native.requiresMulticastPermission,
-      platformDetails: native.platformDetails,
+      platformDetails: <String, Object?>{
+        ...native.platformDetails,
+        'sharedSsdpEngine': !kIsWeb,
+        'secureUpnpMetadata': !kIsWeb,
+      },
     );
   }
 
-  /// Performs a snapshot discovery and returns the result.
-  ///
-  /// The discovery runs for [LocalDiscoveryRequest.duration] and returns
-  /// a deduplicated snapshot of discovered devices and services.
-  Future<LocalDiscoverySnapshot> discover(
-    LocalDiscoveryRequest request,
-  ) async {
+  /// Performs bounded discovery and returns the final normalized snapshot.
+  Future<LocalDiscoverySnapshot> discover(LocalDiscoveryRequest request) async {
     request.validate();
     final session = await start(request);
     try {
@@ -66,64 +74,111 @@ class FlutterLocalDeviceDiscovery {
   }
 
   /// Starts a discovery session.
-  ///
-  /// The session continues until [LocalDiscoverySession.stop] is called.
-  Future<LocalDiscoverySession> start(
-    LocalDiscoveryRequest request,
-  ) async {
+  Future<LocalDiscoverySession> start(LocalDiscoveryRequest request) async {
     request.validate();
+    final platform = FlutterLocalDeviceDiscoveryPlatform.instance;
     final nativeRequest = _toNativeRequest(request);
-    final sessionId = await FlutterLocalDeviceDiscoveryPlatform.instance
-        .startDiscovery(nativeRequest);
+    final ssdpEnabled = !kIsWeb &&
+        (request.protocols.contains(LocalDiscoveryProtocol.ssdp) ||
+            request.protocols.contains(LocalDiscoveryProtocol.upnp) ||
+            request.ssdpSearchTargets.isNotEmpty);
 
-    final events = FlutterLocalDeviceDiscoveryPlatform.instance
-        .eventsForSession(sessionId);
+    String? nativeSessionId;
+    Stream<LocalDiscoveryEvent> nativeEvents =
+        const Stream<LocalDiscoveryEvent>.empty();
+    Object? nativeStartError;
+    try {
+      nativeSessionId = await platform.startDiscovery(nativeRequest);
+      nativeEvents =
+          platform.eventsForSession(nativeSessionId).map(_eventFromNative);
+    } on Object catch (error) {
+      nativeStartError = error;
+      if (!ssdpEnabled) rethrow;
+    }
 
-    return _LocalDiscoverySessionImpl(
-      id: sessionId,
+    final id = nativeSessionId ??
+        'dart-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+    final session = _LocalDiscoverySessionImpl(
+      id: id,
+      nativeSessionId: nativeSessionId,
       request: request,
-      events: events.map(_eventFromNative),
+      platform: platform,
+      nativeEvents: nativeEvents,
+      ssdpEngine: ssdpEnabled ? SsdpDiscoveryEngine() : null,
+      aggregator: DeviceAggregator(),
+      sharedDiagnostics: _sharedDiagnostics,
     );
+    await session.initialize(nativeStartError: nativeStartError);
+    return session;
   }
 
   /// Checks whether discovery can start with the given request.
   Future<LocalDiscoveryReadiness> checkReadiness(
     LocalDiscoveryRequest request,
   ) async {
+    request.validate();
     final native = await FlutterLocalDeviceDiscoveryPlatform.instance
         .checkReadiness(_toNativeRequest(request));
+    final warnings = native.warnings.toSet();
+    if (request.fetchUpnpDescriptions &&
+        !request.protocols.contains(LocalDiscoveryProtocol.ssdp) &&
+        !request.protocols.contains(LocalDiscoveryProtocol.upnp)) {
+      warnings.add('upnp_metadata_requires_ssdp_or_upnp_protocol');
+    }
     return LocalDiscoveryReadiness(
       canStart: native.canStart,
       requirements: native.requirements.toSet(),
-      warnings: native.warnings.toSet(),
-      platformDetails: native.platformDetails,
+      warnings: warnings,
+      platformDetails: <String, Object?>{
+        ...native.platformDetails,
+        'ssdpRequested':
+            request.protocols.contains(LocalDiscoveryProtocol.ssdp) ||
+                request.protocols.contains(LocalDiscoveryProtocol.upnp),
+      },
     );
   }
 
-  /// Returns diagnostics about the discovery engine.
+  /// Returns diagnostics from both the native and shared v0.2 engines.
   Future<LocalDiscoveryDiagnostics> getDiagnostics() async {
-    final native = await FlutterLocalDeviceDiscoveryPlatform.instance
-        .getDiagnostics();
+    final native =
+        await FlutterLocalDeviceDiscoveryPlatform.instance.getDiagnostics();
+    final supportedProtocols = native.supportedProtocols
+        .map(_protocolFromInt)
+        .whereType<LocalDiscoveryProtocol>()
+        .toSet();
+    if (!kIsWeb) {
+      supportedProtocols
+        ..add(LocalDiscoveryProtocol.ssdp)
+        ..add(LocalDiscoveryProtocol.upnp);
+    }
     return LocalDiscoveryDiagnostics(
-      pluginVersion: native.pluginVersion,
+      pluginVersion: '0.2.0',
       platformVersion: native.platformVersion,
-      supportedProtocols: native.supportedProtocols
-          .map(_protocolFromInt)
-          .whereType<LocalDiscoveryProtocol>()
-          .toSet(),
-      activeSessions: native.activeSessions,
+      supportedProtocols: supportedProtocols,
+      activeSessions: native.activeSessions > _sharedDiagnostics.activeSessions
+          ? native.activeSessions
+          : _sharedDiagnostics.activeSessions,
       networkInterfaces: native.networkInterfaces,
       multicastAvailable: native.multicastAvailable,
       localNetworkReady: native.localNetworkReady,
-      rawObservationCount: native.rawObservationCount,
-      deduplicatedDeviceCount: native.deduplicatedDeviceCount,
+      rawObservationCount:
+          native.rawObservationCount + _sharedDiagnostics.rawObservationCount,
+      deduplicatedDeviceCount: _sharedDiagnostics.deduplicatedDeviceCount > 0
+          ? _sharedDiagnostics.deduplicatedDeviceCount
+          : native.deduplicatedDeviceCount,
       resolutionSuccessCount: native.resolutionSuccessCount,
       resolutionFailureCount: native.resolutionFailureCount,
-      metadataFetchCount: native.metadataFetchCount,
-      droppedEventCount: native.droppedEventCount,
+      metadataFetchCount:
+          native.metadataFetchCount + _sharedDiagnostics.metadataFetchCount,
+      droppedEventCount:
+          native.droppedEventCount + _sharedDiagnostics.droppedEventCount,
       lastNetworkChangeAt: native.lastNetworkChangeAt,
-      warnings: native.warnings,
-      platformDetails: native.platformDetails,
+      warnings: <String>[...native.warnings, ..._sharedDiagnostics.warnings],
+      platformDetails: <String, Object?>{
+        ...native.platformDetails,
+        'sharedSsdpEngine': !kIsWeb,
+        'upnpMetadataFailureCount': _sharedDiagnostics.metadataFailureCount,
+      },
     );
   }
 
@@ -151,61 +206,52 @@ class FlutterLocalDeviceDiscovery {
       deduplicateResults: request.deduplicateResults,
       classifyDevices: request.classifyDevices,
       monitorNetworkChanges: request.monitorNetworkChanges,
+      maxDevices: request.maxDevices,
+      maxServices: request.maxServices,
       metadata: request.metadata,
     );
   }
 
   LocalDiscoveryEvent _eventFromNative(NativeDiscoveryEvent event) {
-    switch (event.type) {
-      case 0:
-        return const LocalDiscoveryStarted();
-      case 1:
-        return LocalDeviceAdded(_deviceFromNative(event.device!));
-      case 2:
-        return LocalDeviceUpdated(_deviceFromNative(event.device!));
-      case 3:
-        return LocalDeviceRemoved(_deviceFromNative(event.device!));
-      case 4:
-        return LocalServiceAdded(_serviceFromNative(event.service!));
-      case 5:
-        return LocalServiceUpdated(_serviceFromNative(event.service!));
-      case 6:
-        return LocalServiceRemoved(_serviceFromNative(event.service!));
-      case 7:
-        return const LocalNetworkChanged();
-      case 8:
-        return LocalDiscoveryWarning(event.errorMessage ?? 'Unknown warning');
-      case 9:
-        return LocalDiscoveryFailure(
+    return switch (event.type) {
+      0 => const LocalDiscoveryStarted(),
+      1 => LocalDeviceAdded(_deviceFromNative(event.device!)),
+      2 => LocalDeviceUpdated(_deviceFromNative(event.device!)),
+      3 => LocalDeviceRemoved(_deviceFromNative(event.device!)),
+      4 => LocalServiceAdded(_serviceFromNative(event.service!)),
+      5 => LocalServiceUpdated(_serviceFromNative(event.service!)),
+      6 => LocalServiceRemoved(_serviceFromNative(event.service!)),
+      7 => const LocalNetworkChanged(),
+      8 => LocalDiscoveryWarning(event.errorMessage ?? 'Unknown warning'),
+      9 => LocalDiscoveryFailure(
           event.errorMessage ?? event.errorCode ?? 'Unknown error',
-        );
-      case 10:
-        return const LocalDiscoveryStopped();
-      default:
-        return LocalDiscoveryWarning('Unknown event type: ${event.type}');
-    }
+        ),
+      10 => const LocalDiscoveryStopped(),
+      _ => LocalDiscoveryWarning('Unknown event type: ${event.type}'),
+    };
   }
 
   LocalDevice _deviceFromNative(NativeDevice device) {
+    final services = device.services.map(_serviceFromNative).toList();
     return LocalDevice(
       id: device.id,
       displayName: device.displayName,
       hostname: device.hostname,
       addresses: device.addresses
           .map(
-            (a) => InternetAddressValue(
-              address: a.address,
-              family: a.family,
-              scopeId: a.scopeId,
-              interfaceName: a.interfaceName,
-              isLoopback: a.isLoopback,
-              isLinkLocal: a.isLinkLocal,
-              isPrivate: a.isPrivate,
-              isMulticast: a.isMulticast,
+            (address) => InternetAddressValue(
+              address: address.address,
+              family: address.family,
+              scopeId: address.scopeId,
+              interfaceName: address.interfaceName,
+              isLoopback: address.isLoopback,
+              isLinkLocal: address.isLinkLocal,
+              isPrivate: address.isPrivate,
+              isMulticast: address.isMulticast,
             ),
           )
           .toList(),
-      services: device.services.map(_serviceFromNative).toList(),
+      services: services,
       type: _deviceTypeFromInt(device.type),
       capabilities: device.capabilities
           .map(_capabilityFromInt)
@@ -213,7 +259,8 @@ class FlutterLocalDeviceDiscovery {
           .toSet(),
       identity: LocalDeviceIdentity(
         macAddress: device.macAddress,
-        serviceInstance: device.serviceInstance,
+        serviceInstance: device.serviceInstance ??
+            (services.isEmpty ? null : services.first.instanceName),
         uniqueDeviceName: device.uniqueDeviceName,
         upnpUdn: device.upnpUdn,
         wsEndpointReference: device.wsEndpointReference,
@@ -242,15 +289,15 @@ class FlutterLocalDeviceDiscovery {
       hostname: service.hostname,
       addresses: service.addresses
           .map(
-            (a) => InternetAddressValue(
-              address: a.address,
-              family: a.family,
-              scopeId: a.scopeId,
-              interfaceName: a.interfaceName,
-              isLoopback: a.isLoopback,
-              isLinkLocal: a.isLinkLocal,
-              isPrivate: a.isPrivate,
-              isMulticast: a.isMulticast,
+            (address) => InternetAddressValue(
+              address: address.address,
+              family: address.family,
+              scopeId: address.scopeId,
+              interfaceName: address.interfaceName,
+              isLoopback: address.isLoopback,
+              isLinkLocal: address.isLinkLocal,
+              isPrivate: address.isPrivate,
+              isMulticast: address.isMulticast,
             ),
           )
           .toList(),
@@ -266,198 +313,411 @@ class FlutterLocalDeviceDiscovery {
           .toSet(),
       firstSeenAt: service.firstSeenAt,
       lastSeenAt: service.lastSeenAt,
-      ttl: service.ttlSeconds != null
-          ? Duration(seconds: service.ttlSeconds!)
-          : null,
+      ttl: service.ttlSeconds == null
+          ? null
+          : Duration(seconds: service.ttlSeconds!),
       resolved: service.resolved,
-      location: service.location != null ? Uri.tryParse(service.location!) : null,
+      location:
+          service.location == null ? null : Uri.tryParse(service.location!),
       metadata: service.metadata,
     );
   }
 
-  static int _modeToInt(LocalDiscoveryMode mode) {
-    switch (mode) {
-      case LocalDiscoveryMode.servicesOnly:
-        return 0;
-      case LocalDiscoveryMode.devicesOnly:
-        return 1;
-      case LocalDiscoveryMode.servicesAndDevices:
-        return 2;
-      case LocalDiscoveryMode.continuous:
-        return 3;
-      case LocalDiscoveryMode.snapshot:
-        return 4;
-    }
-  }
+  static int _modeToInt(LocalDiscoveryMode mode) => mode.index;
 
-  static int _protocolToInt(LocalDiscoveryProtocol protocol) {
-    switch (protocol) {
-      case LocalDiscoveryProtocol.mdns:
-        return 0;
-      case LocalDiscoveryProtocol.dnsSd:
-        return 1;
-      case LocalDiscoveryProtocol.bonjour:
-        return 2;
-      case LocalDiscoveryProtocol.ssdp:
-        return 3;
-      case LocalDiscoveryProtocol.upnp:
-        return 4;
-      case LocalDiscoveryProtocol.wsDiscovery:
-        return 5;
-      case LocalDiscoveryProtocol.neighborTable:
-        return 6;
-      case LocalDiscoveryProtocol.reachability:
-        return 7;
-      case LocalDiscoveryProtocol.safePortProbe:
-        return 8;
-    }
-  }
+  static int _protocolToInt(LocalDiscoveryProtocol protocol) => protocol.index;
 
-  static LocalDiscoveryProtocol? _protocolFromInt(int value) {
-    switch (value) {
-      case 0:
-        return LocalDiscoveryProtocol.mdns;
-      case 1:
-        return LocalDiscoveryProtocol.dnsSd;
-      case 2:
-        return LocalDiscoveryProtocol.bonjour;
-      case 3:
-        return LocalDiscoveryProtocol.ssdp;
-      case 4:
-        return LocalDiscoveryProtocol.upnp;
-      case 5:
-        return LocalDiscoveryProtocol.wsDiscovery;
-      case 6:
-        return LocalDiscoveryProtocol.neighborTable;
-      case 7:
-        return LocalDiscoveryProtocol.reachability;
-      case 8:
-        return LocalDiscoveryProtocol.safePortProbe;
-      default:
-        return null;
-    }
-  }
+  static LocalDiscoveryProtocol? _protocolFromInt(int value) =>
+      value >= 0 && value < LocalDiscoveryProtocol.values.length
+          ? LocalDiscoveryProtocol.values[value]
+          : null;
 
-  static LocalDeviceType _deviceTypeFromInt(int value) {
-    if (value < 0 || value >= LocalDeviceType.values.length) {
-      return LocalDeviceType.unknown;
-    }
-    return LocalDeviceType.values[value];
-  }
+  static LocalDeviceType _deviceTypeFromInt(int value) =>
+      value >= 0 && value < LocalDeviceType.values.length
+          ? LocalDeviceType.values[value]
+          : LocalDeviceType.unknown;
 
-  static LocalDeviceCapability? _capabilityFromInt(int value) {
-    if (value < 0 || value >= LocalDeviceCapability.values.length) {
-      return null;
-    }
-    return LocalDeviceCapability.values[value];
-  }
+  static LocalDeviceCapability? _capabilityFromInt(int value) =>
+      value >= 0 && value < LocalDeviceCapability.values.length
+          ? LocalDeviceCapability.values[value]
+          : null;
 }
 
-/// A concrete implementation of [LocalDiscoverySession].
 class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
   _LocalDiscoverySessionImpl({
     required this.id,
+    required this.nativeSessionId,
     required this.request,
-    required this._events,
+    required this.platform,
+    required this.nativeEvents,
+    required this.ssdpEngine,
+    required this.aggregator,
+    required this.sharedDiagnostics,
   });
 
   @override
   final String id;
-
+  final String? nativeSessionId;
   @override
   final LocalDiscoveryRequest request;
+  final FlutterLocalDeviceDiscoveryPlatform platform;
+  final Stream<LocalDiscoveryEvent> nativeEvents;
+  final SsdpDiscoveryEngine? ssdpEngine;
+  final DeviceAggregator aggregator;
+  final _SharedDiscoveryDiagnostics sharedDiagnostics;
 
-  final Stream<LocalDiscoveryEvent> _events;
-
+  final StreamController<LocalDiscoveryEvent> _controller =
+      StreamController<LocalDiscoveryEvent>.broadcast();
+  final Map<String, LocalDevice> _rawDevices = <String, LocalDevice>{};
+  final Map<String, LocalDevice> _visibleDevices = <String, LocalDevice>{};
+  final Map<String, LocalService> _services = <String, LocalService>{};
+  final Completer<void> _stopped = Completer<void>();
+  StreamSubscription<LocalDiscoveryEvent>? _nativeSubscription;
+  StreamSubscription<SsdpEngineEvent>? _ssdpSubscription;
   LocalDiscoverySessionState _state = LocalDiscoverySessionState.created;
+  DateTime? _startedAt;
+  int _lastSsdpObservationCount = 0;
+  int _lastMetadataFetchCount = 0;
+  int _lastMetadataFailureCount = 0;
 
   @override
   LocalDiscoverySessionState get state => _state;
 
   @override
-  Stream<LocalDiscoveryEvent> get events => _events;
+  Stream<LocalDiscoveryEvent> get events => _controller.stream;
+
+  Future<void> initialize({Object? nativeStartError}) async {
+    _state = LocalDiscoverySessionState.starting;
+    _startedAt = DateTime.now();
+    sharedDiagnostics.sessionStarted();
+    _nativeSubscription = nativeEvents.listen(
+      _handleNativeEvent,
+      onError: (Object error) => _warning('Native event stream failed: $error'),
+    );
+
+    if (ssdpEngine != null) {
+      _ssdpSubscription = ssdpEngine!.events.listen(
+        _handleSsdpEvent,
+        onError: (Object error) => _warning('SSDP engine failed: $error'),
+      );
+      try {
+        final interval = request.mode == LocalDiscoveryMode.continuous
+            ? const Duration(seconds: 30)
+            : Duration(seconds: (request.duration.inSeconds ~/ 2).clamp(5, 30));
+        await ssdpEngine!.start(
+          searchTargets: request.ssdpSearchTargets,
+          fetchUpnpDescriptions: request.fetchUpnpDescriptions,
+          metadataSecurityPolicy: request.metadataSecurityPolicy,
+          includeLoopback: request.includeLoopback,
+          includeLinkLocal: request.includeLinkLocal,
+          includeVpnInterfaces: request.includeVpnInterfaces,
+          includeCellularInterfaces: request.includeCellularInterfaces,
+          includePeerToPeer: request.includePeerToPeer,
+          searchInterval: interval,
+        );
+      } on Object catch (error) {
+        _warning('SSDP could not start: $error');
+      }
+    }
+    if (nativeStartError != null) {
+      _warning('Native discovery could not start: $nativeStartError');
+    }
+    _state = LocalDiscoverySessionState.running;
+    _emit(const LocalDiscoveryStarted());
+  }
+
+  void _handleNativeEvent(LocalDiscoveryEvent event) {
+    switch (event) {
+      case LocalDiscoveryStarted():
+      case LocalDiscoveryStopped():
+        return;
+      case LocalDeviceAdded(:final device):
+      case LocalDeviceUpdated(:final device):
+        final key = 'native:${device.id}';
+        final existing = _rawDevices[key];
+        _rawDevices[key] = existing == null
+            ? device
+            : aggregator.mergeDevices(existing, device);
+        _rebuildDevices();
+      case LocalDeviceRemoved(:final device):
+        _rawDevices.remove('native:${device.id}');
+        _rebuildDevices();
+      case LocalServiceAdded(:final service):
+        _upsertService(service, added: true);
+      case LocalServiceUpdated(:final service):
+        _upsertService(service, added: false);
+      case LocalServiceRemoved(:final service):
+        _removeService(service);
+      case LocalNetworkChanged():
+        if (request.monitorNetworkChanges) _emit(event);
+      case LocalDiscoveryWarning(:final message):
+        _warning(message);
+      case LocalDiscoveryFailure():
+        _emit(event);
+    }
+  }
+
+  void _handleSsdpEvent(SsdpEngineEvent event) {
+    _syncSsdpMetrics();
+    switch (event) {
+      case SsdpDeviceDiscovered(:final device, :final description):
+        final rootKey = device.usn.split('::').first.toLowerCase();
+        final key = 'ssdp:$rootKey';
+        var normalized = aggregator.mergeSsdpDevice(
+          existing: _rawDevices[key],
+          ssdp: device,
+          discoveredBy: 'ssdp',
+        );
+        if (description != null) {
+          normalized = aggregator.enrichWithUpnp(
+            device: normalized,
+            description: description,
+          );
+        }
+        _rawDevices[key] = normalized;
+        _rebuildDevices();
+      case SsdpDeviceExpired(:final deviceKey):
+        _rawDevices.remove('ssdp:${deviceKey.toLowerCase()}');
+        _rebuildDevices();
+      case SsdpEngineWarning(:final message):
+        _warning(message);
+    }
+  }
+
+  void _upsertService(LocalService service, {required bool added}) {
+    final alreadyExists = _services.containsKey(service.id);
+    if (!alreadyExists && _services.length >= request.maxServices) {
+      sharedDiagnostics.droppedEventCount++;
+      return;
+    }
+    _services[service.id] = service;
+    _attachServiceToDevices(service);
+    if (_includesServices) {
+      _emit(
+        added && !alreadyExists
+            ? LocalServiceAdded(service)
+            : LocalServiceUpdated(service),
+      );
+    }
+  }
+
+  void _removeService(LocalService service) {
+    final removed = _services.remove(service.id);
+    for (final entry in _rawDevices.entries.toList()) {
+      if (entry.value.services.any((item) => item.id == service.id)) {
+        _rawDevices[entry.key] = entry.value.copyWith(
+          services: entry.value.services
+              .where((item) => item.id != service.id)
+              .toList(),
+        );
+      }
+    }
+    _rebuildDevices();
+    if (_includesServices && removed != null) {
+      _emit(LocalServiceRemoved(removed));
+    }
+  }
+
+  void _attachServiceToDevices(LocalService service) {
+    for (final entry in _rawDevices.entries.toList()) {
+      final device = entry.value;
+      final matches = device.services.any(
+            (item) =>
+                item.id == service.id ||
+                item.instanceName == service.instanceName,
+          ) ||
+          device.identity.serviceInstance == service.instanceName;
+      if (!matches) continue;
+      final services = <String, LocalService>{
+        for (final item in device.services) item.id: item,
+        service.id: service,
+      };
+      _rawDevices[entry.key] = device.copyWith(
+        services: services.values.toList(growable: false),
+      );
+    }
+    _rebuildDevices();
+  }
+
+  void _rebuildDevices() {
+    var devices = request.deduplicateResults
+        ? aggregator.aggregate(_rawDevices.values.toList())
+        : _rawDevices.values
+            .map(
+              request.classifyDevices
+                  ? aggregator.enrichFromServices
+                  : (device) => device,
+            )
+            .toList();
+    if (!request.classifyDevices) {
+      devices = devices
+          .map(
+            (device) => device.copyWith(
+              type: LocalDeviceType.unknown,
+              capabilities: const <LocalDeviceCapability>{},
+              capabilityEvidence: const [],
+              confidence: 0,
+            ),
+          )
+          .toList();
+    }
+    final filter = request.filter;
+    if (filter != null) devices = devices.where(filter.matches).toList();
+    if (devices.length > request.maxDevices) {
+      sharedDiagnostics.droppedEventCount +=
+          devices.length - request.maxDevices;
+      devices = devices.take(request.maxDevices).toList();
+    }
+
+    final next = <String, LocalDevice>{
+      for (final device in devices) device.id: device,
+    };
+    if (_includesDevices) {
+      for (final entry in _visibleDevices.entries) {
+        if (!next.containsKey(entry.key)) {
+          _emit(LocalDeviceRemoved(entry.value));
+        }
+      }
+      for (final entry in next.entries) {
+        final previous = _visibleDevices[entry.key];
+        if (previous == null) {
+          _emit(LocalDeviceAdded(entry.value));
+        } else if (!_equivalent(previous, entry.value)) {
+          _emit(LocalDeviceUpdated(entry.value));
+        }
+      }
+    }
+    _visibleDevices
+      ..clear()
+      ..addAll(next);
+    sharedDiagnostics.deduplicatedDeviceCount = _visibleDevices.length;
+  }
+
+  bool _equivalent(LocalDevice a, LocalDevice b) {
+    return a.displayName == b.displayName &&
+        a.hostname == b.hostname &&
+        a.type == b.type &&
+        a.confidence == b.confidence &&
+        _setEquals(a.capabilities, b.capabilities) &&
+        _setEquals(a.discoveredBy, b.discoveredBy) &&
+        _setEquals(
+          a.addresses.map((address) => address.address).toSet(),
+          b.addresses.map((address) => address.address).toSet(),
+        ) &&
+        _setEquals(
+          a.services
+              .map((service) => '${service.id}:${service.resolved}')
+              .toSet(),
+          b.services
+              .map((service) => '${service.id}:${service.resolved}')
+              .toSet(),
+        ) &&
+        a.identity == b.identity &&
+        a.metadata.toString() == b.metadata.toString();
+  }
+
+  bool _setEquals<T>(Set<T> a, Set<T> b) =>
+      a.length == b.length && a.containsAll(b);
+
+  bool get _includesDevices => request.mode != LocalDiscoveryMode.servicesOnly;
+  bool get _includesServices => request.mode != LocalDiscoveryMode.devicesOnly;
+
+  void _syncSsdpMetrics() {
+    final engine = ssdpEngine;
+    if (engine == null) return;
+    final rawDelta = engine.rawObservationCount - _lastSsdpObservationCount;
+    final fetchDelta = engine.metadataFetchCount - _lastMetadataFetchCount;
+    final failureDelta =
+        engine.metadataFailureCount - _lastMetadataFailureCount;
+    if (rawDelta > 0) sharedDiagnostics.rawObservationCount += rawDelta;
+    if (fetchDelta > 0) sharedDiagnostics.metadataFetchCount += fetchDelta;
+    if (failureDelta > 0) {
+      sharedDiagnostics.metadataFailureCount += failureDelta;
+    }
+    _lastSsdpObservationCount = engine.rawObservationCount;
+    _lastMetadataFetchCount = engine.metadataFetchCount;
+    _lastMetadataFailureCount = engine.metadataFailureCount;
+  }
+
+  void _warning(String message) {
+    sharedDiagnostics.addWarning(message);
+    _emit(LocalDiscoveryWarning(message));
+  }
+
+  void _emit(LocalDiscoveryEvent event) {
+    if (!_controller.isClosed) _controller.add(event);
+  }
 
   @override
   Future<LocalDiscoverySnapshot> snapshot() async {
-    final devices = <LocalDevice>[];
-    final services = <LocalService>[];
-    final startedAt = DateTime.now();
-
-    // Collect events for the remaining duration of the request.
-    final deadline = DateTime.now().add(request.duration);
-    final completer = Completer<void>();
-
-    final subscription = _events.listen(
-      (event) {
-        switch (event) {
-          case LocalDeviceAdded(:final device):
-            devices.add(device);
-          case LocalDeviceUpdated(:final device):
-            final index = devices.indexWhere((d) => d.id == device.id);
-            if (index >= 0) {
-              devices[index] = device;
-            } else {
-              devices.add(device);
-            }
-          case LocalServiceAdded(:final service):
-            services.add(service);
-          case LocalServiceUpdated(:final service):
-            final index = services.indexWhere((s) => s.id == service.id);
-            if (index >= 0) {
-              services[index] = service;
-            } else {
-              services.add(service);
-            }
-          default:
-            break;
-        }
-      },
-      onDone: () {
-        if (!completer.isCompleted) completer.complete();
-      },
-      onError: (Object error) {
-        if (!completer.isCompleted) completer.complete();
-      },
-    );
-
-    // Wait until the deadline or the stream closes, whichever comes first.
-    final remaining = deadline.difference(DateTime.now());
-    if (remaining > Duration.zero) {
-      await Future.any([
-        completer.future,
+    final startedAt = _startedAt ?? DateTime.now();
+    final remaining =
+        startedAt.add(request.duration).difference(DateTime.now());
+    if (remaining > Duration.zero &&
+        _state != LocalDiscoverySessionState.stopped) {
+      await Future.any<void>(<Future<void>>[
         Future<void>.delayed(remaining),
+        _stopped.future,
       ]);
     }
-
-    await subscription.cancel();
-
+    final completedAt = DateTime.now();
     return LocalDiscoverySnapshot(
       sessionId: id,
-      devices: devices,
-      services: services,
+      devices: _includesDevices
+          ? List<LocalDevice>.unmodifiable(_visibleDevices.values)
+          : const <LocalDevice>[],
+      services: _includesServices
+          ? List<LocalService>.unmodifiable(_services.values)
+          : const <LocalService>[],
       startedAt: startedAt,
-      completedAt: DateTime.now(),
+      completedAt: completedAt,
+      duration: completedAt.difference(startedAt),
     );
   }
 
   @override
   Future<void> pause() async {
+    if (_state != LocalDiscoverySessionState.running) return;
+    if (nativeSessionId != null) {
+      await platform.pauseDiscovery(nativeSessionId!);
+    }
+    await ssdpEngine?.pause();
     _state = LocalDiscoverySessionState.paused;
-    await FlutterLocalDeviceDiscoveryPlatform.instance.pauseDiscovery(id);
   }
 
   @override
   Future<void> resume() async {
+    if (_state != LocalDiscoverySessionState.paused) return;
+    if (nativeSessionId != null) {
+      await platform.resumeDiscovery(nativeSessionId!);
+    }
+    await ssdpEngine?.resume();
     _state = LocalDiscoverySessionState.running;
-    await FlutterLocalDeviceDiscoveryPlatform.instance.resumeDiscovery(id);
   }
 
   @override
   Future<void> stop() async {
-    if (_state == LocalDiscoverySessionState.stopped) return;
+    if (_state == LocalDiscoverySessionState.stopped ||
+        _state == LocalDiscoverySessionState.stopping) {
+      return;
+    }
     _state = LocalDiscoverySessionState.stopping;
-    await FlutterLocalDeviceDiscoveryPlatform.instance.stopDiscovery(id);
+    _syncSsdpMetrics();
+    await _ssdpSubscription?.cancel();
+    await ssdpEngine?.stop();
+    if (nativeSessionId != null) {
+      try {
+        await platform.stopDiscovery(nativeSessionId!);
+      } on Object catch (error) {
+        _warning('Native discovery did not stop cleanly: $error');
+      }
+    }
+    await _nativeSubscription?.cancel();
     _state = LocalDiscoverySessionState.stopped;
+    sharedDiagnostics.sessionStopped();
+    _emit(const LocalDiscoveryStopped());
+    if (!_stopped.isCompleted) _stopped.complete();
+    await _controller.close();
   }
 }
 
@@ -470,16 +730,9 @@ class LocalDiscoveryReadiness {
     this.platformDetails = const <String, Object?>{},
   });
 
-  /// Whether discovery can start.
   final bool canStart;
-
-  /// Requirements that must be met before discovery can start.
   final Set<String> requirements;
-
-  /// Warnings about the discovery configuration.
   final Set<String> warnings;
-
-  /// Platform-specific details.
   final Map<String, Object?> platformDetails;
 }
 
@@ -504,51 +757,42 @@ class LocalDiscoveryDiagnostics {
     this.platformDetails = const <String, Object?>{},
   });
 
-  /// The plugin version.
   final String? pluginVersion;
-
-  /// The platform version.
   final String? platformVersion;
-
-  /// The protocols supported by this platform.
   final Set<LocalDiscoveryProtocol> supportedProtocols;
-
-  /// The number of active sessions.
   final int activeSessions;
-
-  /// The names of network interfaces.
   final List<String> networkInterfaces;
-
-  /// Whether multicast is available.
   final bool multicastAvailable;
-
-  /// Whether the local network is ready.
   final bool localNetworkReady;
-
-  /// The number of raw observations.
   final int rawObservationCount;
-
-  /// The number of deduplicated devices.
   final int deduplicatedDeviceCount;
-
-  /// The number of successful service resolutions.
   final int resolutionSuccessCount;
-
-  /// The number of failed service resolutions.
   final int resolutionFailureCount;
-
-  /// The number of metadata fetches.
   final int metadataFetchCount;
-
-  /// The number of dropped events.
   final int droppedEventCount;
-
-  /// When the last network change occurred.
   final DateTime? lastNetworkChangeAt;
-
-  /// Recent warnings.
   final List<String> warnings;
-
-  /// Platform-specific details.
   final Map<String, Object?> platformDetails;
+}
+
+class _SharedDiscoveryDiagnostics {
+  int activeSessions = 0;
+  int rawObservationCount = 0;
+  int deduplicatedDeviceCount = 0;
+  int metadataFetchCount = 0;
+  int metadataFailureCount = 0;
+  int droppedEventCount = 0;
+  final List<String> warnings = <String>[];
+
+  void sessionStarted() => activeSessions++;
+
+  void sessionStopped() {
+    if (activeSessions > 0) activeSessions--;
+  }
+
+  void addWarning(String warning) {
+    if (warnings.contains(warning)) return;
+    warnings.add(warning);
+    if (warnings.length > 20) warnings.removeAt(0);
+  }
 }

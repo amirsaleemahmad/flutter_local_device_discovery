@@ -1,10 +1,11 @@
 name: flutter_local_device_discovery_example
 description: "Example app for flutter_local_device_discovery."
 publish_to: 'none'
-version: 0.1.0
+version: 0.2.0
 
 environment:
-  sdk: ^3.12.2
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
 
 dependencies:
   flutter:
@@ -15,17 +16,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-
-dependency_overrides:
-  flutter_local_device_discovery_platform_interface:
-    path: ../flutter_local_device_discovery_platform_interface
-  flutter_local_device_discovery_android:
-    path: ../flutter_local_device_discovery_android
-  flutter_local_device_discovery_darwin:
-    path: ../flutter_local_device_discovery_darwin
-  flutter_local_device_discovery_windows:
-    path: ../flutter_local_device_discovery_windows
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true

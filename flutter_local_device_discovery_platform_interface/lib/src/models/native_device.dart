@@ -104,7 +104,9 @@ class NativeDevice {
       displayName: map['displayName']! as String,
       hostname: map['hostname'] as String?,
       addresses: rawAddresses
-          .map((a) => NativeInternetAddress.fromMap(a! as Map<Object?, Object?>))
+          .map(
+            (a) => NativeInternetAddress.fromMap(a! as Map<Object?, Object?>),
+          )
           .toList(),
       interfaces: (map['interfaces'] as List<Object?>? ?? const [])
           .whereType<String>()
@@ -124,8 +126,7 @@ class NativeDevice {
       serialNumber: map['serialNumber'] as String?,
       model: map['model'] as String?,
       manufacturer: map['manufacturer'] as String?,
-      identifiers:
-          _stringStringMap(map['identifiers']),
+      identifiers: _stringStringMap(map['identifiers']),
       protocols: (map['protocols'] as List<Object?>? ?? const [])
           .whereType<int>()
           .toList(),

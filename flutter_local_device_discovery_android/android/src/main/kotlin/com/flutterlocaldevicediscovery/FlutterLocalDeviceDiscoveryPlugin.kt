@@ -17,11 +17,6 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -42,7 +37,6 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
     private lateinit var wifiManager: WifiManager
     private lateinit var connectivityManager: ConnectivityManager
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessions = ConcurrentHashMap<String, DiscoverySession>()
     private val registrations = ConcurrentHashMap<String, NsdManager.RegistrationListener>()
     private val multicastLockRefCount = AtomicInteger(0)
@@ -82,7 +76,6 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
     connectivityManager.unregisterNetworkCallback(networkCallback)
     stopAllSessions()
     releaseMulticastLock()
-    scope.cancel()
   }
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -155,30 +148,24 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
     val args = call.arguments as? Map<*, *> ?: emptyMap<Any?, Any?>()
     val sessionId = UUID.randomUUID().toString()
     val serviceTypes = (args["serviceTypes"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-    val durationMs = (args["durationMilliseconds"] as? Number)?.toLong() ?: 8000L
     val resolveServices = (args["resolveServices"] as? Boolean) ?: true
-    val resolveTimeoutMs = (args["resolveTimeoutMilliseconds"] as? Number)?.toLong() ?: 3000L
 
     val session = DiscoverySession(
       sessionId = sessionId,
       serviceTypes = serviceTypes,
-      durationMs = durationMs,
       resolveServices = resolveServices,
-      resolveTimeoutMs = resolveTimeoutMs,
     )
 
     sessions[sessionId] = session
     acquireMulticastLock()
 
-    scope.launch {
-      try {
-        session.start(nsdManager) { event -> emitEvent(event) }
-        result.success(sessionId)
-      } catch (e: Exception) {
-        sessions.remove(sessionId)
-        releaseMulticastLock()
-        result.error("discovery_start_failed", e.message, null)
-      }
+    try {
+      session.start(nsdManager) { event -> emitEvent(event) }
+      result.success(sessionId)
+    } catch (e: Exception) {
+      sessions.remove(sessionId)
+      releaseMulticastLock()
+      result.error("discovery_start_failed", e.message, null)
     }
   }
 
@@ -208,10 +195,8 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
     val sessionId = call.arguments as? String
     val session = sessionId?.let { sessions.remove(it) }
     if (session != null) {
-      scope.launch {
-        session.stop()
-        releaseMulticastLock()
-      }
+      session.stop()
+      releaseMulticastLock()
     }
     result.success(null)
   }
@@ -286,7 +271,7 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
   private fun handleGetDiagnostics(call: MethodCall, result: Result) {
     result.success(
       mapOf(
-        "pluginVersion" to "0.1.0",
+        "pluginVersion" to "0.2.0",
         "platformVersion" to Build.VERSION.RELEASE,
         "supportedProtocols" to listOf(0, 1, 2),
         "activeSessions" to sessions.size,
@@ -325,10 +310,13 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
   }
 
   private fun stopAllSessions() {
-    sessions.values.forEach { session ->
-      scope.launch { session.stop() }
-    }
+    sessions.values.forEach { session -> session.stop() }
     sessions.clear()
+    multicastLockRefCount.set(0)
+    multicastLock?.let {
+      if (it.isHeld) it.release()
+    }
+    multicastLock = null
   }
 
   private fun emitNetworkChanged() {
@@ -360,22 +348,21 @@ private val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Loca
   timeZone = TimeZone.getTimeZone("UTC")
 }
 
-private fun isoTimestamp(): String = isoFormatter.format(Date())
+private fun isoTimestamp(): String = synchronized(isoFormatter) {
+  isoFormatter.format(Date())
+}
 
 /** A single discovery session using Android NSD. */
 class DiscoverySession(
   private val sessionId: String,
   private val serviceTypes: List<String>,
-  private val durationMs: Long,
   private val resolveServices: Boolean,
-  private val resolveTimeoutMs: Long,
 ) {
   private val discoveryListeners = mutableListOf<NsdManager.DiscoveryListener>()
-  private val resolvedServices = ConcurrentHashMap<String, NsdServiceInfo>()
   private val seenServices = ConcurrentHashMap<String, Long>()
+  private var nsdManager: NsdManager? = null
   private var paused = false
   private var stopped = false
-  private var startTime = 0L
 
   var deviceCount: Int = 0
     private set
@@ -387,7 +374,7 @@ class DiscoverySession(
     get() = seenServices.size
 
   fun start(nsdManager: NsdManager, emit: (Map<String, Any?>) -> Unit) {
-    startTime = System.currentTimeMillis()
+    this.nsdManager = nsdManager
     serviceTypes.forEach { rawServiceType ->
       // Android NSD requires the service type with a trailing dot,
       // e.g. "_airplay._tcp." instead of "_airplay._tcp"
@@ -409,7 +396,20 @@ class DiscoverySession(
   fun stop() {
     if (stopped) return
     stopped = true
-    // Discovery listeners are stopped by the plugin's session cleanup.
+    val manager = nsdManager
+    if (manager != null) {
+      discoveryListeners.forEach { listener ->
+        try {
+          manager.stopServiceDiscovery(listener)
+        } catch (_: IllegalArgumentException) {
+          // The listener may already have stopped after a platform failure.
+        } catch (_: IllegalStateException) {
+          // NSD can reject shutdown while the adapter is being torn down.
+        }
+      }
+    }
+    discoveryListeners.clear()
+    nsdManager = null
   }
 
   private fun createDiscoveryListener(

@@ -25,7 +25,8 @@ abstract final class ServiceTypeValidator {
       if (part.length > 63) return false;
       // Allow letters, digits, hyphens, and underscores
       for (final char in part.codeUnits) {
-        final isLetter = (char >= 65 && char <= 90) || (char >= 97 && char <= 122);
+        final isLetter =
+            (char >= 65 && char <= 90) || (char >= 97 && char <= 122);
         final isDigit = char >= 48 && char <= 57;
         final isHyphen = char == 45;
         final isUnderscore = char == 95;
@@ -47,7 +48,8 @@ abstract final class ServiceTypeValidator {
     return ServiceTypeParts(
       serviceName: parts[0].substring(1),
       transport: parts[parts.length - 1].substring(1),
-      subTypes: parts.length > 2 ? parts.sublist(1, parts.length - 1) : const [],
+      subTypes:
+          parts.length > 2 ? parts.sublist(1, parts.length - 1) : const [],
     );
   }
 }

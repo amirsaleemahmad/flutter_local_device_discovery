@@ -67,18 +67,28 @@ void main() {
 
     test('validates service types', () {
       expect(
-        () => const LocalDiscoveryRequest(
-          serviceTypes: {'invalid'},
-        ).validate(),
+        () => const LocalDiscoveryRequest(serviceTypes: {'invalid'}).validate(),
         throwsArgumentError,
       );
     });
 
     test('accepts valid request', () {
-      const request = LocalDiscoveryRequest(
-        serviceTypes: {'_http._tcp'},
-      );
+      const request = LocalDiscoveryRequest(serviceTypes: {'_http._tcp'});
       expect(() => request.validate(), returnsNormally);
+    });
+
+    test('requires a protocol and rejects unsafe SSDP targets', () {
+      expect(
+        () => const LocalDiscoveryRequest(protocols: {}).validate(),
+        throwsArgumentError,
+      );
+      expect(
+        () => const LocalDiscoveryRequest(
+          protocols: {LocalDiscoveryProtocol.ssdp},
+          ssdpSearchTargets: {'ssdp:all\r\nInjected: value'},
+        ).validate(),
+        throwsArgumentError,
+      );
     });
   });
 

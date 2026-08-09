@@ -1,10 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_device_discovery/flutter_local_device_discovery.dart';
 
-void main() {
-  runApp(const DeviceDiscoveryApp());
-}
+void main() => runApp(const DeviceDiscoveryApp());
 
 class DeviceDiscoveryApp extends StatelessWidget {
   const DeviceDiscoveryApp({super.key});
@@ -12,7 +12,8 @@ class DeviceDiscoveryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Local Device Discovery',
+      title: 'Local Discovery v0.2 Review',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
@@ -37,217 +38,420 @@ class DiscoveryDashboard extends StatefulWidget {
 }
 
 class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
-  final _discovery = FlutterLocalDeviceDiscovery();
-  final _serviceTypes = <String>{
+  static const Set<String> _serviceTypes = <String>{
     '_http._tcp',
-    '_https._tcp',
     '_ipp._tcp',
-    '_ipps._tcp',
     '_printer._tcp',
-    '_pdl-datastream._tcp',
-    '_scanner._tcp',
     '_airplay._tcp',
-    '_raop._tcp',
     '_googlecast._tcp',
-    '_googlezone._tcp',
-    '_spotify-connect._tcp',
-    '_sonos._tcp',
     '_ssh._tcp',
     '_smb._tcp',
-    '_ftp._tcp',
-    '_webdav._tcp',
-    '_nfs._tcp',
-    '_afpovertcp._tcp',
-    '_rfb._tcp',
-    '_companion-link._tcp',
-    '_homekit._tcp',
-    '_hap._tcp',
-    '_mediaremotetv._tcp',
-    '_touch-able._tcp',
-    '_device-info._tcp',
-    '_workstation._tcp',
-    '_airport._tcp',
-    '_adisk._tcp',
-    '_sleep-proxy._udp',
-    '_presence._tcp',
-    '_tls._tcp',
   };
 
-  List<LocalDevice> _devices = [];
-  List<LocalService> _services = [];
-  bool _isDiscovering = false;
-  String? _error;
+  final FlutterLocalDeviceDiscovery _discovery = FlutterLocalDeviceDiscovery();
+  final Map<String, LocalDevice> _devices = <String, LocalDevice>{};
+  final Map<String, LocalService> _services = <String, LocalService>{};
+  final List<String> _eventLog = <String>[];
+  final List<String> _warnings = <String>[];
+
   LocalDiscoveryCapabilities? _capabilities;
-  DateTime? _lastDiscoveryAt;
-  final Duration _discoveryDuration = const Duration(seconds: 15);
+  LocalDiscoveryReadiness? _readiness;
+  LocalDiscoveryDiagnostics? _diagnostics;
+  LocalDiscoverySession? _session;
+  StreamSubscription<LocalDiscoveryEvent>? _eventSubscription;
+  bool _isDiscovering = false;
+  bool _enableDnsSd = true;
+  bool _enableSsdp = true;
+  bool _fetchUpnpDescriptions = true;
+  int _durationSeconds = 10;
+  String? _error;
+  DateTime? _lastCompletedAt;
 
   @override
   void initState() {
     super.initState();
-    _loadCapabilities();
+    unawaited(_loadCapabilities());
+  }
+
+  @override
+  void dispose() {
+    unawaited(_eventSubscription?.cancel());
+    unawaited(_session?.stop());
+    super.dispose();
   }
 
   Future<void> _loadCapabilities() async {
     try {
-      final caps = await _discovery.getCapabilities();
-      setState(() => _capabilities = caps);
-    } catch (e) {
-      setState(() => _error = 'Failed to load capabilities: $e');
+      final capabilities = await _discovery.getCapabilities();
+      final diagnostics = await _discovery.getDiagnostics();
+      if (!mounted) return;
+      setState(() {
+        _capabilities = capabilities;
+        _diagnostics = diagnostics;
+      });
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = 'Capability check failed: $error');
     }
   }
 
+  LocalDiscoveryRequest _buildRequest() {
+    final protocols = <LocalDiscoveryProtocol>{};
+    if (_enableDnsSd) {
+      protocols
+        ..add(LocalDiscoveryProtocol.mdns)
+        ..add(LocalDiscoveryProtocol.dnsSd)
+        ..add(LocalDiscoveryProtocol.bonjour);
+    }
+    if (_enableSsdp) {
+      protocols
+        ..add(LocalDiscoveryProtocol.ssdp)
+        ..add(LocalDiscoveryProtocol.upnp);
+    }
+    return LocalDiscoveryRequest(
+      mode: LocalDiscoveryMode.servicesAndDevices,
+      protocols: protocols,
+      serviceTypes: _enableDnsSd ? _serviceTypes : const <String>{},
+      ssdpSearchTargets:
+          _enableSsdp ? const <String>{'ssdp:all'} : const <String>{},
+      duration: Duration(seconds: _durationSeconds),
+      resolveServices: true,
+      fetchUpnpDescriptions: _enableSsdp && _fetchUpnpDescriptions,
+      deduplicateResults: true,
+      classifyDevices: true,
+      metadataSecurityPolicy: MetadataSecurityPolicy.defaultPolicy,
+    );
+  }
+
   Future<void> _startDiscovery() async {
+    if (_isDiscovering) return;
     if (kIsWeb) {
       setState(() {
-        _error = 'Local device discovery is not supported on web. '
-            'Please run this example on a native platform '
-            '(Android, iOS, macOS, or Windows).';
-        _isDiscovering = false;
+        _error = 'Browsers cannot access mDNS or SSDP sockets. Run the example '
+            'on Android, iOS, macOS, or Windows.';
       });
       return;
     }
+    if (!_enableDnsSd && !_enableSsdp) {
+      setState(() => _error = 'Enable at least one discovery protocol.');
+      return;
+    }
 
+    final request = _buildRequest();
     setState(() {
       _isDiscovering = true;
       _error = null;
-      _devices = [];
-      _services = [];
+      _readiness = null;
+      _devices.clear();
+      _services.clear();
+      _eventLog.clear();
+      _warnings.clear();
     });
 
+    LocalDiscoverySession? session;
     try {
-      final result = await _discovery.discover(
-        LocalDiscoveryRequest(
-          duration: _discoveryDuration,
-          serviceTypes: _serviceTypes,
-          resolveServices: true,
-        ),
-      );
+      final readiness = await _discovery.checkReadiness(request);
+      if (!mounted) return;
+      setState(() {
+        _readiness = readiness;
+        _warnings.addAll(readiness.warnings);
+      });
+      if (!readiness.canStart) {
+        throw StateError(
+          'Discovery requirements are not met: '
+          '${readiness.requirements.join(', ')}',
+        );
+      }
+
+      session = await _discovery.start(request);
+      _session = session;
+      _eventSubscription = session.events.listen(_handleEvent);
+      final snapshot = await session.snapshot();
+      await _eventSubscription?.cancel();
+      await session.stop();
+      final diagnostics = await _discovery.getDiagnostics();
 
       if (!mounted) return;
       setState(() {
-        _devices = result.devices;
-        _services = result.services;
-        _isDiscovering = false;
-        _lastDiscoveryAt = DateTime.now();
+        _devices
+          ..clear()
+          ..addEntries(
+            snapshot.devices.map((device) => MapEntry(device.id, device)),
+          );
+        _services
+          ..clear()
+          ..addEntries(
+            snapshot.services.map((service) => MapEntry(service.id, service)),
+          );
+        _diagnostics = diagnostics;
+        _lastCompletedAt = snapshot.completedAt;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'Discovery failed: $e';
-        _isDiscovering = false;
-      });
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = 'Discovery failed: $error');
+    } finally {
+      await _eventSubscription?.cancel();
+      if (session != null &&
+          session.state != LocalDiscoverySessionState.stopped) {
+        await session.stop();
+      }
+      if (mounted) {
+        setState(() {
+          _isDiscovering = false;
+          _session = null;
+          _eventSubscription = null;
+        });
+      }
     }
+  }
+
+  Future<void> _stopDiscovery() async {
+    await _session?.stop();
+  }
+
+  void _handleEvent(LocalDiscoveryEvent event) {
+    if (!mounted) return;
+    setState(() {
+      switch (event) {
+        case LocalDiscoveryStarted():
+          _log('Discovery engines started');
+        case LocalDeviceAdded(:final device):
+          _devices[device.id] = device;
+          _log('Device added: ${device.displayName}');
+        case LocalDeviceUpdated(:final device):
+          _devices[device.id] = device;
+          _log('Device enriched: ${device.displayName}');
+        case LocalDeviceRemoved(:final device):
+          _devices.remove(device.id);
+          _log('Device removed: ${device.displayName}');
+        case LocalServiceAdded(:final service):
+          _services[service.id] = service;
+          _log('Service added: ${service.serviceType}');
+        case LocalServiceUpdated(:final service):
+          _services[service.id] = service;
+          _log('Service resolved: ${service.instanceName}');
+        case LocalServiceRemoved(:final service):
+          _services.remove(service.id);
+          _log('Service removed: ${service.instanceName}');
+        case LocalNetworkChanged():
+          _log('Network configuration changed');
+        case LocalDiscoveryWarning(:final message):
+          if (!_warnings.contains(message)) _warnings.add(message);
+          _log('Warning: $message');
+        case LocalDiscoveryFailure(:final error):
+          if (!_warnings.contains('$error')) _warnings.add('$error');
+          _log('Engine failure: $error');
+        case LocalDiscoveryStopped():
+          _log('Discovery engines stopped');
+      }
+    });
+  }
+
+  void _log(String message) {
+    _eventLog.insert(0, '${_clock(DateTime.now())}  $message');
+    if (_eventLog.length > 12) _eventLog.removeLast();
   }
 
   @override
   Widget build(BuildContext context) {
+    final devices = _devices.values.toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    final services = _services.values.toList()
+      ..sort((a, b) => a.instanceName.compareTo(b.instanceName));
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Local Device Discovery'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isDiscovering ? null : _startDiscovery,
-            tooltip: 'Start discovery',
-          ),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('Local Discovery'),
+            Text('v0.2 review console', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: <Widget>[
+          if (_isDiscovering)
+            IconButton(
+              onPressed: _stopDiscovery,
+              tooltip: 'Stop discovery',
+              icon: const Icon(Icons.stop_circle_outlined),
+            )
+          else
+            IconButton(
+              onPressed: _startDiscovery,
+              tooltip: 'Start discovery',
+              icon: const Icon(Icons.radar),
+            ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _startDiscovery,
+        onRefresh: _isDiscovering ? () async {} : _startDiscovery,
         child: ListView(
           padding: const EdgeInsets.all(16),
-          children: [
-            _buildStatusCard(),
-            if (_error != null) _buildErrorCard(),
-            if (_isDiscovering) ...[
-              const SizedBox(height: 8),
+          children: <Widget>[
+            _buildControlPanel(),
+            if (_isDiscovering) ...<Widget>[
+              const SizedBox(height: 12),
               const LinearProgressIndicator(),
-              const SizedBox(height: 8),
-              Center(
-                child: Text(
-                  'Discovering for ${_discoveryDuration.inSeconds} seconds...',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+            ],
+            if (_error != null) ...<Widget>[
+              const SizedBox(height: 12),
+              _MessageCard(
+                icon: Icons.error_outline,
+                message: _error!,
+                color: Theme.of(context).colorScheme.errorContainer,
               ),
             ],
+            if (_warnings.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              _WarningsCard(warnings: _warnings),
+            ],
             const SizedBox(height: 16),
-            _buildSummaryCard(),
-            const SizedBox(height: 16),
-            Text(
-              'Devices (${_devices.length})',
-              style: Theme.of(context).textTheme.titleLarge,
+            _buildSummary(devices),
+            const SizedBox(height: 20),
+            _SectionHeader(
+              title: 'Devices',
+              count: devices.length,
+              subtitle: 'Deduplicated across DNS-SD, SSDP, and UPnP',
             ),
             const SizedBox(height: 8),
-            if (_devices.isEmpty && !_isDiscovering)
-              const _EmptyState(
+            if (devices.isEmpty)
+              const _EmptyCard(
                 icon: Icons.devices_other,
-                message: 'No devices found. Tap refresh to start discovery.',
+                message: 'Start discovery to inspect normalized devices.',
               )
             else
-              ..._devices.map((device) => _DeviceCard(device: device)),
-            const SizedBox(height: 24),
-            Text(
-              'Services (${_services.length})',
-              style: Theme.of(context).textTheme.titleLarge,
+              ...devices.map((device) => _DeviceCard(device: device)),
+            const SizedBox(height: 20),
+            _SectionHeader(
+              title: 'DNS-SD services',
+              count: services.length,
+              subtitle: 'Resolved ports, addresses, and TXT records',
             ),
             const SizedBox(height: 8),
-            if (_services.isEmpty && !_isDiscovering)
-              const _EmptyState(
-                icon: Icons.dns,
-                message: 'No services found.',
+            if (services.isEmpty)
+              const _EmptyCard(
+                icon: Icons.dns_outlined,
+                message: 'No DNS-SD services observed yet.',
               )
             else
-              ..._services.map((service) => _ServiceCard(service: service)),
+              ...services.map((service) => _ServiceCard(service: service)),
+            const SizedBox(height: 20),
+            _DiagnosticsCard(diagnostics: _diagnostics, eventLog: _eventLog),
+            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusCard() {
-    final caps = _capabilities;
+  Widget _buildControlPanel() {
+    final capabilities = _capabilities;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Status', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
+          children: <Widget>[
             Row(
-              children: [
+              children: <Widget>[
                 Icon(
-                  _isDiscovering ? Icons.sync : Icons.check_circle,
-                  color: _isDiscovering ? Colors.orange : Colors.green,
+                  _isDiscovering ? Icons.radar : Icons.tune,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
-                Text(_isDiscovering ? 'Discovering...' : 'Ready'),
-                if (_lastDiscoveryAt != null) ...[
-                  const Spacer(),
-                  Text(
-                    'Last: ${_formatTime(_lastDiscoveryAt!)}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                Expanded(
+                  child: Text(
+                    _isDiscovering ? 'Discovery in progress' : 'Review setup',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                ],
-              ],
-            ),
-            if (caps != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Protocols: ${caps.supportedProtocols.map((p) => p.name).join(', ')}',
-              ),
-              Text('IPv4: ${caps.supportsIpv4 ? 'Yes' : 'No'}'),
-              Text('IPv6: ${caps.supportsIpv6 ? 'Yes' : 'No'}'),
-              Text(
-                'Registration: ${caps.supportsServiceRegistration ? 'Yes' : 'No'}',
-              ),
-              if (caps.platformDetails.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Platform: ${caps.platformDetails.entries.map((e) => '${e.key}=${e.value}').join(', ')}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                FilledButton.icon(
+                  onPressed: _isDiscovering ? _stopDiscovery : _startDiscovery,
+                  icon: Icon(_isDiscovering ? Icons.stop : Icons.play_arrow),
+                  label: Text(_isDiscovering ? 'Stop' : 'Run'),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                FilterChip(
+                  selected: _enableDnsSd,
+                  onSelected: _isDiscovering
+                      ? null
+                      : (value) => setState(() => _enableDnsSd = value),
+                  avatar: const Icon(Icons.dns_outlined, size: 18),
+                  label: const Text('mDNS / DNS-SD'),
+                ),
+                FilterChip(
+                  selected: _enableSsdp,
+                  onSelected: _isDiscovering
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _enableSsdp = value;
+                            if (!value) _fetchUpnpDescriptions = false;
+                          });
+                        },
+                  avatar: const Icon(Icons.cast_connected, size: 18),
+                  label: const Text('SSDP'),
+                ),
+                FilterChip(
+                  selected: _fetchUpnpDescriptions,
+                  onSelected: !_enableSsdp || _isDiscovering
+                      ? null
+                      : (value) =>
+                          setState(() => _fetchUpnpDescriptions = value),
+                  avatar: const Icon(Icons.description_outlined, size: 18),
+                  label: const Text('UPnP metadata'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                const Text('Duration'),
+                const SizedBox(width: 12),
+                SegmentedButton<int>(
+                  segments: const <ButtonSegment<int>>[
+                    ButtonSegment<int>(value: 5, label: Text('5s')),
+                    ButtonSegment<int>(value: 10, label: Text('10s')),
+                    ButtonSegment<int>(value: 15, label: Text('15s')),
+                  ],
+                  selected: <int>{_durationSeconds},
+                  onSelectionChanged: _isDiscovering
+                      ? null
+                      : (values) =>
+                          setState(() => _durationSeconds = values.single),
+                ),
+              ],
+            ),
+            if (capabilities != null) ...<Widget>[
+              const Divider(height: 24),
+              Text(
+                'Available: ${capabilities.supportedProtocols.map((item) => item.name).join(', ')}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (_readiness != null) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                _readiness!.canStart
+                    ? 'Readiness check passed'
+                    : 'Readiness requirements: '
+                        '${_readiness!.requirements.join(', ')}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _readiness!.canStart
+                          ? Colors.green
+                          : Theme.of(context).colorScheme.error,
+                    ),
+              ),
+            ],
+            if (_lastCompletedAt != null) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                'Last completed at ${_clock(_lastCompletedAt!)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ],
         ),
@@ -255,89 +459,83 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
     );
   }
 
-  Widget _buildSummaryCard() {
-    if (_devices.isEmpty && _services.isEmpty) return const SizedBox.shrink();
+  Widget _buildSummary(List<LocalDevice> devices) {
+    final ssdpCount = devices
+        .where(
+          (device) => device.discoveredBy.contains(LocalDiscoveryProtocol.ssdp),
+        )
+        .length;
+    final enrichedCount = devices
+        .where(
+          (device) => device.discoveredBy.contains(LocalDiscoveryProtocol.upnp),
+        )
+        .length;
     return Card(
       color: Theme.of(context).colorScheme.secondaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _SummaryItem(
-              icon: Icons.devices_other,
-              label: 'Devices',
-              value: '${_devices.length}',
-            ),
-            _SummaryItem(
-              icon: Icons.dns,
-              label: 'Services',
-              value: '${_services.length}',
-            ),
-            _SummaryItem(
-              icon: Icons.wifi_tethering,
-              label: 'Protocols',
-              value: '${_capabilities?.supportedProtocols.length ?? 0}',
-            ),
+          children: <Widget>[
+            _SummaryValue(label: 'Devices', value: '${devices.length}'),
+            _SummaryValue(label: 'Services', value: '${_services.length}'),
+            _SummaryValue(label: 'SSDP', value: '$ssdpCount'),
+            _SummaryValue(label: 'Enriched', value: '$enrichedCount'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildErrorCard() {
-    return Card(
-      color: Theme.of(context).colorScheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              Icons.error_outline,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(_error!)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    return '${diff.inHours}h ago';
-  }
+  String _clock(DateTime time) => '${time.hour.toString().padLeft(2, '0')}:'
+      '${time.minute.toString().padLeft(2, '0')}:'
+      '${time.second.toString().padLeft(2, '0')}';
 }
 
-class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+class _SummaryValue extends StatelessWidget {
+  const _SummaryValue({required this.label, required this.value});
 
-  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge,
+    return Expanded(
+      child: Column(
+        children: <Widget>[
+          Text(value, style: Theme.of(context).textTheme.headlineSmall),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.count,
+    required this.subtitle,
+  });
+
+  final String title;
+  final int count;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
         ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Badge(label: Text('$count')),
       ],
     );
   }
@@ -350,134 +548,329 @@ class _DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final identity = device.identity;
     return Card(
       child: ExpansionTile(
-        leading: CircleAvatar(
-          child: Icon(_deviceIcon(device.type)),
-        ),
+        leading: CircleAvatar(child: Icon(_iconFor(device.type))),
         title: Text(device.displayName),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (device.hostname != null) Text('Host: ${device.hostname}'),
-            if (device.addresses.isNotEmpty)
-              Text(
-                'IP: ${device.addresses.map((a) => a.address).join(', ')}',
-              ),
-            if (device.services.isNotEmpty)
-              Text(
-                'Services: ${device.services.map((s) => s.serviceType).join(', ')}',
-              ),
-          ],
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _DetailRow(
-                  label: 'Type',
-                  value: device.type.name,
-                ),
-                _DetailRow(
-                  label: 'Discovered By',
-                  value: device.discoveredBy.map((p) => p.name).join(', '),
-                ),
-                if (device.addresses.isNotEmpty) ...[
-                  const Divider(),
-                  Text(
-                    'Addresses',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  ...device.addresses.map(
-                    (a) => Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${a.address} (IPv${a.family})'
-                        '${a.isLoopback ? ' [loopback]' : ''}'
-                        '${a.isLinkLocal ? ' [link-local]' : ''}'
-                        '${a.isPrivate ? ' [private]' : ''}'
-                        '${a.isMulticast ? ' [multicast]' : ''}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                ],
-                if (device.services.isNotEmpty) ...[
-                  const Divider(),
-                  Text(
-                    'Services',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  ...device.services.map(
-                    (s) => Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${s.serviceType} (${s.instanceName})',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                ],
-                if (device.firstSeenAt != null || device.lastSeenAt != null) ...[
-                  const Divider(),
-                  if (device.firstSeenAt != null)
-                    _DetailRow(
-                      label: 'First Seen',
-                      value: _formatDateTime(device.firstSeenAt!),
-                    ),
-                  if (device.lastSeenAt != null)
-                    _DetailRow(
-                      label: 'Last Seen',
-                      value: _formatDateTime(device.lastSeenAt!),
-                    ),
-                ],
-                if (device.confidence > 0)
-                  _DetailRow(
-                    label: 'Confidence',
-                    value: '${(device.confidence * 100).toStringAsFixed(0)}%',
-                  ),
+          children: <Widget>[
+            if (device.hostname != null) Text(device.hostname!),
+            Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              children: <Widget>[
+                _MiniChip(device.type.name),
+                ...device.discoveredBy.map((item) => _MiniChip(item.name)),
               ],
             ),
-          ),
+          ],
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: <Widget>[
+          _DetailRow(label: 'ID', value: device.id),
+          if (device.addresses.isNotEmpty)
+            _DetailRow(
+              label: 'Addresses',
+              value: device.addresses.map((item) => item.address).join(', '),
+            ),
+          if (identity.manufacturer != null)
+            _DetailRow(label: 'Manufacturer', value: identity.manufacturer!),
+          if (identity.model != null)
+            _DetailRow(label: 'Model', value: identity.model!),
+          if (identity.serialNumber != null)
+            _DetailRow(label: 'Serial', value: identity.serialNumber!),
+          if (identity.upnpUdn != null)
+            _DetailRow(label: 'UPnP UDN', value: identity.upnpUdn!),
+          if (device.metadata['ssdpLocation'] case final String location)
+            _DetailRow(label: 'Description', value: location),
+          if (device.metadata['ssdpSearchTarget'] case final String target)
+            _DetailRow(label: 'SSDP target', value: target),
+          if (device.metadata['ssdpServer'] case final String server)
+            _DetailRow(label: 'SSDP server', value: server),
+          if (device.capabilities.isNotEmpty) ...<Widget>[
+            const Divider(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Inferred capabilities',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: device.capabilities
+                    .map((item) => Chip(label: Text(item.name)))
+                    .toList(),
+              ),
+            ),
+          ],
+          if (device.capabilityEvidence.isNotEmpty) ...<Widget>[
+            const Divider(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Capability evidence',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            ...device.capabilityEvidence.map(
+              (item) => _DetailRow(
+                label: item.capability,
+                value: '${(item.confidence * 100).round()}% · ${item.source}',
+              ),
+            ),
+          ],
+          if (device.services.isNotEmpty) ...<Widget>[
+            const Divider(),
+            _DetailRow(
+              label: 'Services',
+              value: device.services.map((item) => item.serviceType).join(', '),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  IconData _deviceIcon(LocalDeviceType type) {
-    switch (type) {
-      case LocalDeviceType.printer:
-        return Icons.print;
-      case LocalDeviceType.camera:
-        return Icons.videocam;
-      case LocalDeviceType.smartTv:
-        return Icons.tv;
-      case LocalDeviceType.speaker:
-        return Icons.speaker;
-      case LocalDeviceType.router:
-        return Icons.router;
-      case LocalDeviceType.nas:
-        return Icons.storage;
-      case LocalDeviceType.computer:
-        return Icons.computer;
-      case LocalDeviceType.mobileDevice:
-        return Icons.phone_android;
-      default:
-        return Icons.devices_other;
-    }
-  }
+  IconData _iconFor(LocalDeviceType type) => switch (type) {
+        LocalDeviceType.printer => Icons.print_outlined,
+        LocalDeviceType.scanner => Icons.document_scanner_outlined,
+        LocalDeviceType.camera => Icons.videocam_outlined,
+        LocalDeviceType.smartTv ||
+        LocalDeviceType.mediaRenderer =>
+          Icons.tv_outlined,
+        LocalDeviceType.mediaServer ||
+        LocalDeviceType.nas =>
+          Icons.storage_outlined,
+        LocalDeviceType.router || LocalDeviceType.gateway => Icons.router,
+        LocalDeviceType.computer ||
+        LocalDeviceType.server =>
+          Icons.computer_outlined,
+        _ => Icons.devices_other,
+      };
+}
 
-  String _formatDateTime(DateTime time) {
-    final local = time.toLocal();
-    final now = DateTime.now();
-    final diff = now.difference(local);
-    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+class _ServiceCard extends StatelessWidget {
+  const _ServiceCard({required this.service});
+
+  final LocalService service;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ExpansionTile(
+        leading: Icon(service.resolved ? Icons.dns : Icons.dns_outlined),
+        title: Text(service.instanceName),
+        subtitle: Text(service.serviceType),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: <Widget>[
+          _DetailRow(label: 'Domain', value: service.domain),
+          if (service.hostname != null)
+            _DetailRow(label: 'Host', value: service.hostname!),
+          if (service.port != null)
+            _DetailRow(label: 'Port', value: '${service.port}'),
+          _DetailRow(label: 'Resolved', value: service.resolved ? 'Yes' : 'No'),
+          _DetailRow(
+            label: 'Protocols',
+            value: service.discoveredBy.map((item) => item.name).join(', '),
+          ),
+          if (service.addresses.isNotEmpty)
+            _DetailRow(
+              label: 'Addresses',
+              value: service.addresses.map((item) => item.address).join(', '),
+            ),
+          if (service.textTxtRecords.isNotEmpty) ...<Widget>[
+            const Divider(),
+            ...service.textTxtRecords.entries.map(
+              (item) => _DetailRow(label: item.key, value: item.value),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagnosticsCard extends StatelessWidget {
+  const _DiagnosticsCard({required this.diagnostics, required this.eventLog});
+
+  final LocalDiscoveryDiagnostics? diagnostics;
+  final List<String> eventLog;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = diagnostics;
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: eventLog.isNotEmpty,
+        leading: const Icon(Icons.monitor_heart_outlined),
+        title: const Text('Diagnostics and event log'),
+        subtitle: Text(
+          value == null
+              ? 'No diagnostic snapshot yet'
+              : '${value.rawObservationCount} observations · '
+                  '${value.metadataFetchCount} metadata fetches',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: <Widget>[
+          if (value != null) ...<Widget>[
+            _DetailRow(
+              label: 'Plugin',
+              value: value.pluginVersion ?? 'unknown',
+            ),
+            _DetailRow(
+              label: 'Raw observations',
+              value: '${value.rawObservationCount}',
+            ),
+            _DetailRow(
+              label: 'Deduplicated',
+              value: '${value.deduplicatedDeviceCount}',
+            ),
+            _DetailRow(
+              label: 'UPnP fetches',
+              value: '${value.metadataFetchCount}',
+            ),
+            _DetailRow(
+              label: 'Resolved services',
+              value: '${value.resolutionSuccessCount}',
+            ),
+            _DetailRow(
+              label: 'Dropped events',
+              value: '${value.droppedEventCount}',
+            ),
+          ],
+          if (eventLog.isNotEmpty) ...<Widget>[
+            const Divider(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Latest events',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...eventLog.map(
+              (item) => Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    item,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WarningsCard extends StatelessWidget {
+  const _WarningsCard({required this.warnings});
+
+  final List<String> warnings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.tertiaryContainer,
+      child: ExpansionTile(
+        leading: const Icon(Icons.warning_amber_outlined),
+        title: Text(
+          '${warnings.length} warning${warnings.length == 1 ? '' : 's'}',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: warnings
+            .map(
+              (item) => Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Text('• $item'),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({
+    required this.icon,
+    required this.message,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String message;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: color,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: <Widget>[
+            Icon(icon),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card.outlined(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: <Widget>[
+            Icon(icon, size: 42, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  const _MiniChip(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+    );
   }
 }
 
@@ -490,149 +883,24 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           SizedBox(
-            width: 110,
+            width: 120,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(
-            child: Text(
+            child: SelectableText(
               value,
               style: Theme.of(context).textTheme.bodySmall,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.service});
-
-  final LocalService service;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ExpansionTile(
-        leading: const Icon(Icons.dns),
-        title: Text(service.instanceName),
-        subtitle: Text('Type: ${service.serviceType}'),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _DetailRow(label: 'Domain', value: service.domain),
-                if (service.port != null)
-                  _DetailRow(label: 'Port', value: '${service.port}'),
-                if (service.hostname != null)
-                  _DetailRow(label: 'Host', value: service.hostname!),
-                _DetailRow(
-                  label: 'Transport',
-                  value: service.transport.name,
-                ),
-                _DetailRow(
-                  label: 'Resolved',
-                  value: service.resolved ? 'Yes' : 'No',
-                ),
-                _DetailRow(
-                  label: 'Discovered By',
-                  value: service.discoveredBy.map((p) => p.name).join(', '),
-                ),
-                if (service.addresses.isNotEmpty) ...[
-                  const Divider(),
-                  Text(
-                    'Addresses',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  ...service.addresses.map(
-                    (a) => Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${a.address} (IPv${a.family})',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                ],
-                if (service.textTxtRecords.isNotEmpty) ...[
-                  const Divider(),
-                  Text(
-                    'TXT Records',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  ...service.textTxtRecords.entries.map(
-                    (e) => Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${e.key} = ${e.value}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                ],
-                if (service.firstSeenAt != null || service.lastSeenAt != null) ...[
-                  const Divider(),
-                  if (service.firstSeenAt != null)
-                    _DetailRow(
-                      label: 'First Seen',
-                      value: _formatDateTime(service.firstSeenAt!),
-                    ),
-                  if (service.lastSeenAt != null)
-                    _DetailRow(
-                      label: 'Last Seen',
-                      value: _formatDateTime(service.lastSeenAt!),
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDateTime(DateTime time) {
-    final local = time.toLocal();
-    final now = DateTime.now();
-    final diff = now.difference(local);
-    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
       ),

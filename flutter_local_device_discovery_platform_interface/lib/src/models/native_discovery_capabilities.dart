@@ -52,12 +52,12 @@ class NativeDiscoveryCapabilities {
     return const {};
   }
 
-
   static NativeDiscoveryCapabilities fromMap(Map<Object?, Object?> map) {
     return NativeDiscoveryCapabilities(
-      supportedProtocols: (map['supportedProtocols'] as List<Object?>? ?? const [])
-          .whereType<int>()
-          .toList(),
+      supportedProtocols:
+          (map['supportedProtocols'] as List<Object?>? ?? const [])
+              .whereType<int>()
+              .toList(),
       supportsServiceRegistration:
           map['supportsServiceRegistration'] as bool? ?? false,
       supportsIpv4: map['supportsIpv4'] as bool? ?? true,

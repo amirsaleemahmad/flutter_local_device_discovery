@@ -1,104 +1,163 @@
 # flutter_local_device_discovery
 
-Native local-network device and service discovery for Flutter using mDNS, DNS-SD, Bonjour, SSDP, UPnP and WS-Discovery across Android, iOS, macOS and Windows.
-
+[![pub package](https://img.shields.io/pub/v/flutter_local_device_discovery.svg)](https://pub.dev/packages/flutter_local_device_discovery)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/X8Y824GXT3)
 
+Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 0.2 combines native mDNS/DNS-SD browsing with SSDP discovery, secure UPnP metadata, and cross-protocol device aggregation.
 
 ## Features
 
-- **Native-first**: Uses the most appropriate native networking APIs on each platform
-- **mDNS/DNS-SD/Bonjour**: Service browsing and resolution
-- **Device models**: Normalized, strongly typed device and service models
-- **Continuous & snapshot modes**: Both live monitoring and bounded discovery
-- **Network-interface awareness**: IPv4/IPv6, Wi-Fi/Ethernet/VPN interfaces
-- **Deduplication**: Basic device deduplication across protocols
-- **Classification**: Basic device type classification
-- **Service-type validation**: Validate and parse service types
-- **Address parsing**: Parse and classify IPv4/IPv6 addresses
+- Native Android NSD and Apple Network framework service discovery
+- mDNS, DNS-SD, and Bonjour browsing and resolution
+- Active SSDP M-SEARCH across eligible IPv4 interfaces
+- Passive SSDP alive, update, byebye, and cache-expiry handling
+- Secure, bounded UPnP device-description retrieval
+- Snapshot and continuous discovery sessions
+- Cross-protocol deduplication by UDN, hostname, address, and service identity
+- Device classification with inspectable capability evidence
+- IPv4/IPv6 and network-interface-aware models
+- Readiness checks, live events, warnings, and diagnostics
 
-## Supported Platforms
+## Platform support
 
-| Platform | Status |
-|----------|--------|
-| Android  | ✅ Native NSD |
-| iOS      | ✅ Network framework |
-| macOS    | ✅ Network framework |
-| Windows  | 🚧 Foundation |
+| Platform | Minimum | Discovery support |
+| --- | --- | --- |
+| Android | API 21 | Native NSD plus SSDP/UPnP |
+| iOS | 13.0 | Network framework plus SSDP/UPnP |
+| macOS | 10.15 | Network framework plus SSDP/UPnP |
+| Windows | Flutter-supported versions | SSDP/UPnP; native DNS-SD is not yet implemented |
+| Web | — | API compiles and reports unsupported; browsers cannot open the required multicast sockets |
+
+The package requires Dart 3.5 or later and Flutter 3.24 or later.
 
 ## Installation
 
-Add to your `pubspec.yaml`:
+Add the package to your application:
 
 ```yaml
 dependencies:
-  flutter_local_device_discovery: ^0.1.0
+  flutter_local_device_discovery: ^0.2.0
 ```
 
-## Quick Start
+Then run `flutter pub get`.
 
-### Snapshot Discovery
+## Snapshot discovery
+
+`discover` starts a bounded session, waits for the configured duration, returns its normalized snapshot, and releases the session resources.
 
 ```dart
 import 'package:flutter_local_device_discovery/flutter_local_device_discovery.dart';
 
 final discovery = FlutterLocalDeviceDiscovery();
 
-final result = await discovery.discover(
+final snapshot = await discovery.discover(
   const LocalDiscoveryRequest(
     duration: Duration(seconds: 8),
+    protocols: {
+      LocalDiscoveryProtocol.mdns,
+      LocalDiscoveryProtocol.dnsSd,
+      LocalDiscoveryProtocol.ssdp,
+      LocalDiscoveryProtocol.upnp,
+    },
     serviceTypes: {
       '_http._tcp',
       '_ipp._tcp',
-      '_printer._tcp',
       '_googlecast._tcp',
     },
+    ssdpSearchTargets: {'ssdp:all'},
+    fetchUpnpDescriptions: true,
   ),
 );
 
-for (final device in result.devices) {
+for (final device in snapshot.devices) {
   print('${device.displayName}: ${device.addresses}');
 }
 ```
 
-### Continuous Discovery
+UPnP metadata retrieval is opt-in. Set `fetchUpnpDescriptions` to `true` and include either `ssdp` or `upnp` in `protocols`.
+
+## Continuous discovery
+
+Keep the event subscription and session, then cancel and stop both when the owning component is disposed.
 
 ```dart
 final session = await discovery.start(
   const LocalDiscoveryRequest(
     mode: LocalDiscoveryMode.continuous,
+    protocols: {
+      LocalDiscoveryProtocol.mdns,
+      LocalDiscoveryProtocol.dnsSd,
+      LocalDiscoveryProtocol.ssdp,
+    },
     serviceTypes: {'_http._tcp'},
+    ssdpSearchTargets: {'ssdp:all'},
   ),
 );
 
-session.events.listen((event) {
+final subscription = session.events.listen((event) {
   switch (event) {
-    case LocalDeviceAdded():
-      print('Added: ${event.device.displayName}');
-    case LocalDeviceUpdated():
-      print('Updated: ${event.device.displayName}');
-    case LocalDeviceRemoved():
-      print('Removed: ${event.device.displayName}');
-    case LocalDiscoveryFailure():
-      print(event.error);
+    case LocalDeviceAdded(:final device):
+      print('Added: ${device.displayName}');
+    case LocalDeviceUpdated(:final device):
+      print('Updated: ${device.displayName}');
+    case LocalDeviceRemoved(:final device):
+      print('Removed: ${device.displayName}');
+    case LocalDiscoveryWarning(:final message):
+      print('Warning: $message');
+    case LocalDiscoveryFailure(:final error):
+      print('Failure: $error');
+    case _:
+      break;
   }
 });
 
+// When discovery is no longer needed:
+await subscription.cancel();
 await session.stop();
 ```
 
-### Capabilities
+Sessions also support `pause()`, `resume()`, and `snapshot()`.
+
+## Capabilities and readiness
+
+Check support before presenting protocol-specific controls, then check whether a concrete request can start:
 
 ```dart
 final capabilities = await discovery.getCapabilities();
 print(capabilities.supportedProtocols);
+
+final request = const LocalDiscoveryRequest(
+  protocols: {LocalDiscoveryProtocol.ssdp},
+  ssdpSearchTargets: {'ssdp:all'},
+);
+final readiness = await discovery.checkReadiness(request);
+
+if (!readiness.canStart) {
+  print('Requirements: ${readiness.requirements}');
+}
 ```
 
-## Platform Configuration
+## Classification evidence and UPnP identity
+
+Classification is an inference from observable service and device metadata. Applications can inspect the supporting evidence instead of treating a classification as authoritative.
+
+```dart
+for (final device in snapshot.devices) {
+  print('Type: ${device.type}');
+  print('UPnP UDN: ${device.identity.upnpUdn}');
+
+  for (final evidence in device.capabilityEvidence) {
+    print('${evidence.capability}: ${evidence.source}');
+  }
+}
+```
+
+## Platform configuration
 
 ### Android
 
-Add these permissions to your `AndroidManifest.xml`:
+The Android implementation declares these permissions and they are merged into the consuming application manifest:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
@@ -109,12 +168,11 @@ Add these permissions to your `AndroidManifest.xml`:
 
 ### iOS
 
-Add to your `Info.plist`:
+Add a purpose string and every Bonjour service type your application browses to `ios/Runner/Info.plist`:
 
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
 <string>This app discovers devices and services available on your local network.</string>
-
 <key>NSBonjourServices</key>
 <array>
     <string>_http._tcp</string>
@@ -122,32 +180,55 @@ Add to your `Info.plist`:
 </array>
 ```
 
-Only include service types your application actually uses.
+Only declare service types the application actually uses.
 
 ### macOS
 
-Add to your entitlements file:
+Add the same `NSLocalNetworkUsageDescription` and `NSBonjourServices` entries to `macos/Runner/Info.plist`. Sandboxed applications also need client and server networking in both debug/profile and release entitlements:
 
 ```xml
 <key>com.apple.security.network.client</key>
+<true/>
+<key>com.apple.security.network.server</key>
 <true/>
 ```
 
 ### Windows
 
-Multicast traffic may be filtered by the Windows firewall. Public network profiles may behave differently. The plugin does not create firewall exceptions.
+Windows Firewall or enterprise policy can filter multicast UDP. Test on the intended network profile; the plugin does not create firewall exceptions.
 
-## Security & Privacy
+## UPnP metadata security
 
-- Discovery is not authentication or pairing
-- Discovery is not guaranteed inventory
-- No response does not always mean offline
-- Device classification may be inferred
-- MAC addresses may be unavailable
-- Multicast may be blocked on guest/enterprise/isolated networks
-- No analytics or telemetry is included
-- No data is uploaded anywhere
+UPnP descriptions are untrusted network input. The default `MetadataSecurityPolicy`:
+
+- permits private and link-local targets only
+- blocks public and loopback targets
+- validates and pins resolved connection addresses
+- validates every redirect target
+- limits redirects, response size, request time, and XML depth
+- rejects XML document types and entity declarations
+
+Relax `allowExternalAddresses` or `allowLoopbackAddresses` only when the application explicitly trusts those targets.
+
+## Important behavior
+
+- Discovery is not authentication, pairing, or a guaranteed network inventory.
+- Guest Wi-Fi, client isolation, VPNs, firewalls, and enterprise multicast policy can hide devices.
+- A missing response does not prove that a device is offline.
+- Service and device metadata can be malformed or intentionally deceptive.
+- WS-Discovery, neighbor-table inspection, reachability probing, and safe port probing are reserved API surface and are not implemented in v0.2.0.
+
+## Example
+
+The included [example application](example/) is a v0.2 review console with protocol controls, live device/service events, UPnP metadata, capability evidence, readiness, and diagnostics.
+
+## Additional documentation
+
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [API documentation](https://pub.dev/documentation/flutter_local_device_discovery/latest/)
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

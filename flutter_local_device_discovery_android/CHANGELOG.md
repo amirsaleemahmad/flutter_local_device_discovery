@@ -1,8 +1,12 @@
-## 0.2.0
+## 0.2.0 - 2026-08-09
 
-* Updated version to 0.2.0 for federated plugin alignment.
+* Aligned the Android implementation with platform interface 0.2.0.
+* Fixed NSD discovery listeners not being stopped with their owning session.
+* Fixed multicast locks not being released during session and engine cleanup.
+* Made formatter-backed diagnostics safe across concurrent calls.
+* Updated native diagnostic version reporting to 0.2.0.
 
-## 0.1.0
+## 0.1.0 - 2026-08-06
 
-* Initial release of the Android implementation of flutter_local_device_discovery.
-* Uses Android NSD (Network Service Discovery) for mDNS/DNS-SD.
+* Initial Android implementation.
+* Added native NSD browsing and resolution for mDNS/DNS-SD services.

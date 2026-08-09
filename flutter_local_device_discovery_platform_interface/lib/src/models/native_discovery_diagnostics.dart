@@ -64,7 +64,6 @@ class NativeDiscoveryDiagnostics {
     return const {};
   }
 
-
   static NativeDiscoveryDiagnostics fromMap(Map<Object?, Object?> map) {
     return NativeDiscoveryDiagnostics(
       pluginVersion: map['pluginVersion'] as String?,
@@ -74,9 +73,10 @@ class NativeDiscoveryDiagnostics {
               .whereType<int>()
               .toList(),
       activeSessions: map['activeSessions'] as int? ?? 0,
-      networkInterfaces: (map['networkInterfaces'] as List<Object?>? ?? const [])
-          .whereType<String>()
-          .toList(),
+      networkInterfaces:
+          (map['networkInterfaces'] as List<Object?>? ?? const [])
+              .whereType<String>()
+              .toList(),
       multicastAvailable: map['multicastAvailable'] as bool? ?? false,
       localNetworkReady: map['localNetworkReady'] as bool? ?? false,
       rawObservationCount: map['rawObservationCount'] as int? ?? 0,

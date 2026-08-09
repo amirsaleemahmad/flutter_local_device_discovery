@@ -1,3 +1,6 @@
+/// Apple-platform registration for the federated local-device-discovery plugin.
+library;
+
 import 'package:flutter_local_device_discovery_platform_interface/flutter_local_device_discovery_platform_interface.dart';
 
 /// The Apple platform implementation of [FlutterLocalDeviceDiscoveryPlatform].
