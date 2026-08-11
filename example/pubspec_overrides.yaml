@@ -1,0 +1,9 @@
+dependency_overrides:
+  flutter_local_device_discovery_platform_interface:
+    path: ../flutter_local_device_discovery_platform_interface
+  flutter_local_device_discovery_android:
+    path: ../flutter_local_device_discovery_android
+  flutter_local_device_discovery_darwin:
+    path: ../flutter_local_device_discovery_darwin
+  flutter_local_device_discovery_windows:
+    path: ../flutter_local_device_discovery_windows

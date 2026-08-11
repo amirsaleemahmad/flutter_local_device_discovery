@@ -1,3 +1,27 @@
+## 1.0.0 - 2026-08-11
+
+### Added
+
+* Stable, production-ready release.
+* Added support for local service registration and peer advertisement across Android, iOS, macOS, and Windows.
+* Added `LocalServiceRegistration` and handle result APIs to dynamically register and update TXT records.
+* Added native Win32 `DnsServiceRegister`, `DnsServiceRegisterCancel`, and `DnsServiceConstructInstance` integration on Windows.
+* Added reachability verification via `ReachabilityProber` featuring safe, concurrent TCP port-proving capabilities.
+* Added read-only access to ARP neighbor tables via `NeighborTable` on Android/Linux.
+* Updated all federated package version constraints to `1.0.0`.
+
+## 0.3.0 - 2026-08-11
+
+### Added
+
+* Added WS-Discovery (Web Services Dynamic Discovery) engine in pure Dart for cross-platform network device discovery (ONVIF cameras, printers, enterprise equipment).
+* Added secure SOAP XML parser for WS-Discovery ProbeMatches, Hello, and Bye messages with XXE protection and nesting-depth limits.
+* Added ONVIF profile device classification & capability mapping to `DeviceAggregator` for IP cameras.
+* Added native Windows DNS-SD/mDNS browsing and service resolution in C++ using the Win32 `DnsServiceBrowse` and `DnsServiceResolve` APIs.
+* Added continuous session presence monitoring with an active grace-period expiry timer in `_LocalDiscoverySessionImpl` for stale devices/services.
+* Added WS-Discovery tracking to diagnostics and platform capabilities.
+* Updated all federated packages to version `0.3.0`.
+
 ## 0.2.0 - 2026-08-09
 
 ### Added

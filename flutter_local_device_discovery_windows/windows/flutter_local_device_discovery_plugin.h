@@ -13,6 +13,8 @@ namespace flutter_local_device_discovery {
 
 // Forward declarations
 class DiscoverySession;
+class DiscoveryEventStreamHandler;
+class RegisteredService;
 
 // The Windows implementation of flutter_local_device_discovery.
 class FlutterLocalDeviceDiscoveryPlugin : public flutter::Plugin {
@@ -21,7 +23,8 @@ class FlutterLocalDeviceDiscoveryPlugin : public flutter::Plugin {
 
   FlutterLocalDeviceDiscoveryPlugin(
       flutter::PluginRegistrarWindows* registrar,
-      std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel);
+      std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel,
+      DiscoveryEventStreamHandler* stream_handler);
 
   virtual ~FlutterLocalDeviceDiscoveryPlugin();
 
@@ -44,10 +47,21 @@ class FlutterLocalDeviceDiscoveryPlugin : public flutter::Plugin {
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void HandleGetDiagnostics(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleRegisterService(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleUpdateRegisteredService(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleUnregisterService(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
   flutter::PluginRegistrarWindows* registrar_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
+  DiscoveryEventStreamHandler* stream_handler_;
   std::unordered_map<std::string, std::unique_ptr<DiscoverySession>> sessions_;
+  std::unordered_map<std::string, std::unique_ptr<RegisteredService>> registered_services_;
 };
 
 }  // namespace flutter_local_device_discovery

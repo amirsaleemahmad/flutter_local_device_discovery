@@ -4,7 +4,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/X8Y824GXT3)
 
-Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 0.2 combines native mDNS/DNS-SD browsing with SSDP discovery, secure UPnP metadata, and cross-protocol device aggregation.
+Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 1.0 combines native mDNS/DNS-SD browsing with SSDP, WS-Discovery, service registration/advertisement, reachability checks, secure UPnP/SOAP metadata, and cross-protocol device aggregation.
 
 ## Features
 
@@ -26,7 +26,7 @@ Discover, resolve, classify, and monitor devices and services on the local netwo
 | Android | API 21 | Native NSD plus SSDP/UPnP |
 | iOS | 13.0 | Network framework plus SSDP/UPnP |
 | macOS | 10.15 | Network framework plus SSDP/UPnP |
-| Windows | Flutter-supported versions | SSDP/UPnP; native DNS-SD is not yet implemented |
+| Windows | Flutter-supported versions | Native DNS-SD/mDNS browsing, resolution, and service registration; SSDP/UPnP and WS-Discovery |
 | Web | — | API compiles and reports unsupported; browsers cannot open the required multicast sockets |
 
 The package requires Dart 3.5 or later and Flutter 3.24 or later.
@@ -37,7 +37,7 @@ Add the package to your application:
 
 ```yaml
 dependencies:
-  flutter_local_device_discovery: ^0.2.0
+  flutter_local_device_discovery: ^1.0.0
 ```
 
 Then run `flutter pub get`.
@@ -216,7 +216,7 @@ Relax `allowExternalAddresses` or `allowLoopbackAddresses` only when the applica
 - Guest Wi-Fi, client isolation, VPNs, firewalls, and enterprise multicast policy can hide devices.
 - A missing response does not prove that a device is offline.
 - Service and device metadata can be malformed or intentionally deceptive.
-- WS-Discovery, neighbor-table inspection, reachability probing, and safe port probing are reserved API surface and are not implemented in v0.2.0.
+- Neighbor-table inspection, reachability probing, and safe port probing are fully implemented and supported in v1.0.0.
 
 ## Example
 

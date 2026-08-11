@@ -8,9 +8,10 @@ void main() {
     await tester.pumpWidget(const DeviceDiscoveryApp());
 
     expect(find.text('Local Discovery'), findsOneWidget);
-    expect(find.text('v0.2 review console'), findsOneWidget);
+    expect(find.text('v1.0.0 review console'), findsOneWidget);
     expect(find.text('mDNS / DNS-SD'), findsOneWidget);
     expect(find.text('SSDP'), findsAtLeastNWidgets(1));
+    expect(find.text('WS-Discovery'), findsOneWidget);
     expect(find.text('UPnP metadata'), findsOneWidget);
     expect(find.byType(AppBar), findsOneWidget);
   });

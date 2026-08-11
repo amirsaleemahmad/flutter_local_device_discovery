@@ -8,6 +8,7 @@ import '../models/local_network_interface.dart';
 import '../models/local_service.dart';
 import '../models/ssdp_device.dart';
 import '../models/upnp_device_description.dart';
+import '../models/ws_discovery_device.dart';
 import 'local_discovery_protocol.dart';
 
 /// Aggregates, enriches, classifies, and deduplicates protocol observations.
@@ -234,6 +235,100 @@ class DeviceAggregator {
       },
       lastSeenAt: DateTime.now(),
     );
+  }
+
+  /// Merges a WS-Discovery observation into a device or creates a new device.
+  LocalDevice mergeWsDiscoveryDevice({
+    required LocalDevice? existing,
+    required WsDiscoveryDevice ws,
+    required String discoveredBy,
+  }) {
+    final now = ws.lastSeenAt ?? DateTime.now();
+    final address = InternetAddressValue.tryParse(
+      ws.sourceAddress ??
+          (ws.xAddrs.isNotEmpty
+              ? Uri.tryParse(ws.xAddrs.first)?.host ?? ''
+              : ''),
+    );
+    final isOnvif = ws.types.any(
+          (t) =>
+              t.toLowerCase().contains('transmitter') ||
+              t.toLowerCase().contains('onvif'),
+        ) ||
+        ws.scopes.any((s) => s.toLowerCase().contains('onvif'));
+
+    final capabilities = <LocalDeviceCapability>{
+      if (isOnvif) LocalDeviceCapability.onvif,
+    };
+    final evidence = capabilities
+        .map(
+          (capability) => CapabilityEvidence(
+            capability: capability.name,
+            source: '$discoveredBy:types=${ws.types.join(",")}',
+            confidence: 0.9,
+          ),
+        )
+        .toList();
+
+    final observation = LocalDevice(
+      id: ws.endpointReference,
+      displayName: _wsDisplayName(ws),
+      hostname:
+          ws.xAddrs.isNotEmpty ? Uri.tryParse(ws.xAddrs.first)?.host : null,
+      addresses: address == null ? const [] : <InternetAddressValue>[address],
+      type: isOnvif ? LocalDeviceType.camera : LocalDeviceType.unknown,
+      capabilities: capabilities,
+      capabilityEvidence: evidence,
+      identity: LocalDeviceIdentity(
+        uniqueDeviceName: ws.endpointReference,
+        wsEndpointReference: ws.endpointReference,
+        identifiers: <String, String>{
+          'wsEndpointReference': ws.endpointReference,
+          if (ws.metadataVersion != null)
+            'wsMetadataVersion': ws.metadataVersion.toString(),
+        },
+      ),
+      discoveredBy: const <LocalDiscoveryProtocol>{
+        LocalDiscoveryProtocol.wsDiscovery,
+      },
+      firstSeenAt: existing?.firstSeenAt ?? now,
+      lastSeenAt: now,
+      confidence: isOnvif ? 0.9 : 0.5,
+      metadata: <String, Object?>{
+        'wsEndpointReference': ws.endpointReference,
+        'wsTypes': ws.types,
+        'wsScopes': ws.scopes,
+        'wsXAddrs': ws.xAddrs,
+        if (ws.metadataVersion != null) 'wsMetadataVersion': ws.metadataVersion,
+        if (ws.sourceAddress != null) 'wsSourceAddress': ws.sourceAddress,
+      },
+    );
+    if (existing == null) return observation;
+    return mergeDevices(existing, observation);
+  }
+
+  String _wsDisplayName(WsDiscoveryDevice device) {
+    final scopeName = device.scopes.firstWhere(
+      (s) => s.toLowerCase().contains('name/'),
+      orElse: () => '',
+    );
+    if (scopeName.isNotEmpty) {
+      final parts = scopeName.split('name/');
+      if (parts.length > 1) {
+        return Uri.decodeComponent(parts[1].replaceAll('_', ' '));
+      }
+    }
+    final hardwareScope = device.scopes.firstWhere(
+      (s) => s.toLowerCase().contains('hardware/'),
+      orElse: () => '',
+    );
+    if (hardwareScope.isNotEmpty) {
+      final parts = hardwareScope.split('hardware/');
+      if (parts.length > 1) {
+        return Uri.decodeComponent(parts[1]);
+      }
+    }
+    return device.endpointReference.replaceFirst('urn:uuid:', '');
   }
 
   /// Infers device type and capabilities from DNS-SD service types.

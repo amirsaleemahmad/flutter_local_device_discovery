@@ -1,0 +1,3 @@
+dependency_overrides:
+  flutter_local_device_discovery_platform_interface:
+    path: ../flutter_local_device_discovery_platform_interface

@@ -9,6 +9,9 @@ export 'src/discovery/local_discovery_protocol.dart';
 export 'src/discovery/local_discovery_request.dart';
 export 'src/discovery/local_discovery_session.dart';
 export 'src/discovery/device_aggregator.dart';
+export 'src/discovery/local_service_registration.dart';
+export 'src/reachability/reachability_prober.dart';
+export 'src/reachability/neighbor_table.dart';
 
 export 'src/models/internet_address_value.dart';
 export 'src/models/local_device.dart';

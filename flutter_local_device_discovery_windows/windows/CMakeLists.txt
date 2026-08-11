@@ -25,6 +25,7 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
 target_link_libraries(${PLUGIN_NAME} PRIVATE
   ws2_32
   iphlpapi
+  dnsapi
 )
 
 # List of symbols to export

@@ -12,7 +12,7 @@ class DeviceDiscoveryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Local Discovery v0.2 Review',
+      title: 'Local Discovery Review Console',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
@@ -62,21 +62,27 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
   bool _isDiscovering = false;
   bool _enableDnsSd = true;
   bool _enableSsdp = true;
+  bool _enableWsDiscovery = true;
   bool _fetchUpnpDescriptions = true;
   int _durationSeconds = 10;
   String? _error;
   DateTime? _lastCompletedAt;
 
+  List<NeighborTableEntry> _neighborEntries = <NeighborTableEntry>[];
+  LocalServiceRegistrationResult? _registeredDemoService;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadCapabilities());
+    unawaited(_loadNeighborTable());
   }
 
   @override
   void dispose() {
     unawaited(_eventSubscription?.cancel());
     unawaited(_session?.stop());
+    unawaited(_registeredDemoService?.stop());
     super.dispose();
   }
 
@@ -94,6 +100,106 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
     }
   }
 
+  Future<void> _loadNeighborTable() async {
+    try {
+      final entries = await NeighborTable.getEntries();
+      if (!mounted) return;
+      setState(() {
+        _neighborEntries = entries;
+      });
+    } on Object catch (_) {}
+  }
+
+  Future<void> _toggleDemoService() async {
+    final handle = _registeredDemoService;
+    if (handle != null) {
+      await handle.stop();
+      if (!mounted) return;
+      setState(() {
+        _registeredDemoService = null;
+      });
+      _log('Service unadvertised successfully.');
+    } else {
+      try {
+        final newHandle = await _discovery.registerService(
+          const LocalServiceRegistration(
+            instanceName: 'Flutter Demo Service',
+            serviceType: '_http._tcp',
+            port: 8080,
+            txtRecords: {
+              'app': 'demo',
+              'version': '1.0',
+            },
+          ),
+        );
+        if (!mounted) return;
+        setState(() {
+          _registeredDemoService = newHandle;
+        });
+        _log('Service advertised on port 8080.');
+      } on Object catch (e) {
+        _log('Failed to register service: $e');
+      }
+    }
+  }
+
+  Future<void> _probeAddress(String ip) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: <Widget>[
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Probing reachability...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final result = await ReachabilityProber.probe(ip);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Probe Result: $ip'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Status: ${result.status.name.toUpperCase()}'),
+              const SizedBox(height: 8),
+              if (result.lastCheckedAt != null)
+                Text('Checked at: ${result.lastCheckedAt}'),
+              if (result.latency != null)
+                Text('Latency: ${result.latency!.inMilliseconds}ms'),
+              if (result.successfulPort != null) ...<Widget>[
+                Text('Successful Port: ${result.successfulPort}'),
+                Text('Method: ${result.methods.join(", ")}'),
+              ],
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Probe failed: $e')),
+      );
+    }
+  }
+
   LocalDiscoveryRequest _buildRequest() {
     final protocols = <LocalDiscoveryProtocol>{};
     if (_enableDnsSd) {
@@ -107,12 +213,18 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
         ..add(LocalDiscoveryProtocol.ssdp)
         ..add(LocalDiscoveryProtocol.upnp);
     }
+    if (_enableWsDiscovery) {
+      protocols.add(LocalDiscoveryProtocol.wsDiscovery);
+    }
     return LocalDiscoveryRequest(
       mode: LocalDiscoveryMode.servicesAndDevices,
       protocols: protocols,
       serviceTypes: _enableDnsSd ? _serviceTypes : const <String>{},
       ssdpSearchTargets:
           _enableSsdp ? const <String>{'ssdp:all'} : const <String>{},
+      wsDiscoveryTypes: _enableWsDiscovery
+          ? const <String>{'dn:NetworkVideoTransmitter'}
+          : const <String>{},
       duration: Duration(seconds: _durationSeconds),
       resolveServices: true,
       fetchUpnpDescriptions: _enableSsdp && _fetchUpnpDescriptions,
@@ -131,7 +243,7 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
       });
       return;
     }
-    if (!_enableDnsSd && !_enableSsdp) {
+    if (!_enableDnsSd && !_enableSsdp && !_enableWsDiscovery) {
       setState(() => _error = 'Enable at least one discovery protocol.');
       return;
     }
@@ -262,7 +374,7 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text('Local Discovery'),
-            Text('v0.2 review console', style: TextStyle(fontSize: 12)),
+            Text('v1.0.0 review console', style: TextStyle(fontSize: 12)),
           ],
         ),
         actions: <Widget>[
@@ -317,7 +429,10 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
                 message: 'Start discovery to inspect normalized devices.',
               )
             else
-              ...devices.map((device) => _DeviceCard(device: device)),
+              ...devices.map((device) => _DeviceCard(
+                    device: device,
+                    onProbeAddress: _probeAddress,
+                  )),
             const SizedBox(height: 20),
             _SectionHeader(
               title: 'DNS-SD services',
@@ -332,6 +447,57 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
               )
             else
               ...services.map((service) => _ServiceCard(service: service)),
+            const SizedBox(height: 20),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('ARP / Neighbor Table',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const Text(
+                          'Local subnet IP/MAC cache (where permitted)',
+                          style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: _loadNeighborTable,
+                  tooltip: 'Refresh neighbor table',
+                ),
+                Badge(label: Text('${_neighborEntries.length}')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_neighborEntries.isEmpty)
+              const _EmptyCard(
+                icon: Icons.table_rows_outlined,
+                message:
+                    'No ARP table entries parsed. Note: restricted on iOS/macOS.',
+              )
+            else
+              Card(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _neighborEntries.length,
+                  itemBuilder: (context, index) {
+                    final entry = _neighborEntries[index];
+                    return ListTile(
+                      leading: const Icon(Icons.network_ping),
+                      title: Text(entry.ipAddress),
+                      subtitle: Text(
+                          'MAC: ${entry.macAddress} | Interface: ${entry.interfaceName}'),
+                      trailing: FilledButton.tonal(
+                        onPressed: () => _probeAddress(entry.ipAddress),
+                        child: const Text('Probe'),
+                      ),
+                    );
+                  },
+                ),
+              ),
             const SizedBox(height: 20),
             _DiagnosticsCard(diagnostics: _diagnostics, eventLog: _eventLog),
             const SizedBox(height: 24),
@@ -396,6 +562,14 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
                   label: const Text('SSDP'),
                 ),
                 FilterChip(
+                  selected: _enableWsDiscovery,
+                  onSelected: _isDiscovering
+                      ? null
+                      : (value) => setState(() => _enableWsDiscovery = value),
+                  avatar: const Icon(Icons.router_outlined, size: 18),
+                  label: const Text('WS-Discovery'),
+                ),
+                FilterChip(
                   selected: _fetchUpnpDescriptions,
                   onSelected: !_enableSsdp || _isDiscovering
                       ? null
@@ -451,6 +625,33 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
               Text(
                 'Last completed at ${_clock(_lastCompletedAt!)}',
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (capabilities?.supportsServiceRegistration ?? false) ...<Widget>[
+              const Divider(height: 24),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      _registeredDemoService != null
+                          ? 'Advertising "Flutter Demo Service"'
+                          : 'Service Advertising Demo',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _toggleDemoService,
+                    icon: Icon(
+                      _registeredDemoService != null
+                          ? Icons.portable_wifi_off
+                          : Icons.wifi_tethering,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _registeredDemoService != null ? 'Stop Adv' : 'Start Adv',
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -542,9 +743,10 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _DeviceCard extends StatelessWidget {
-  const _DeviceCard({required this.device});
+  const _DeviceCard({required this.device, required this.onProbeAddress});
 
   final LocalDevice device;
+  final void Function(String) onProbeAddress;
 
   @override
   Widget build(BuildContext context) {
@@ -571,9 +773,36 @@ class _DeviceCard extends StatelessWidget {
         children: <Widget>[
           _DetailRow(label: 'ID', value: device.id),
           if (device.addresses.isNotEmpty)
-            _DetailRow(
-              label: 'Addresses',
-              value: device.addresses.map((item) => item.address).join(', '),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      'Addresses',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: device.addresses.map((item) {
+                        return ActionChip(
+                          avatar: const Icon(Icons.network_ping, size: 14),
+                          label: Text(item.address),
+                          onPressed: () => onProbeAddress(item.address),
+                          tooltip: 'Click to probe reachability',
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
             ),
           if (identity.manufacturer != null)
             _DetailRow(label: 'Manufacturer', value: identity.manufacturer!),
@@ -583,12 +812,23 @@ class _DeviceCard extends StatelessWidget {
             _DetailRow(label: 'Serial', value: identity.serialNumber!),
           if (identity.upnpUdn != null)
             _DetailRow(label: 'UPnP UDN', value: identity.upnpUdn!),
+          if (identity.wsEndpointReference != null)
+            _DetailRow(
+              label: 'WS Endpoint',
+              value: identity.wsEndpointReference!,
+            ),
           if (device.metadata['ssdpLocation'] case final String location)
             _DetailRow(label: 'Description', value: location),
           if (device.metadata['ssdpSearchTarget'] case final String target)
             _DetailRow(label: 'SSDP target', value: target),
           if (device.metadata['ssdpServer'] case final String server)
             _DetailRow(label: 'SSDP server', value: server),
+          if (device.metadata['wsTypes'] case final List<dynamic> types)
+            _DetailRow(label: 'WS Types', value: types.join(', ')),
+          if (device.metadata['wsScopes'] case final List<dynamic> scopes)
+            _DetailRow(label: 'WS Scopes', value: scopes.join(', ')),
+          if (device.metadata['wsXAddrs'] case final List<dynamic> xaddrs)
+            _DetailRow(label: 'WS XAddrs', value: xaddrs.join(', ')),
           if (device.capabilities.isNotEmpty) ...<Widget>[
             const Divider(),
             Align(
