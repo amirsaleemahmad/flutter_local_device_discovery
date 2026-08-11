@@ -475,7 +475,7 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
               const _EmptyCard(
                 icon: Icons.table_rows_outlined,
                 message:
-                    'No ARP table entries parsed. Note: restricted on iOS/macOS.',
+                    'No ARP table entries parsed. Note: Restricted on iOS, macOS, and Android 10+ due to OS security policies.',
               )
             else
               Card(
