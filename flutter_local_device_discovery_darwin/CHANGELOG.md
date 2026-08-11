@@ -1,3 +1,11 @@
+## 1.0.0 - 2026-08-11
+
+* Aligned the iOS and macOS implementation with platform interface 1.0.0.
+
+## 0.3.0 - 2026-08-11
+
+* Aligned the iOS and macOS implementation with platform interface 0.3.0.
+
 ## 0.2.0 - 2026-08-09
 
 * Aligned the iOS and macOS implementation with platform interface 0.2.0.

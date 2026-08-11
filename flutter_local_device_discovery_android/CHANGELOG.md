@@ -1,3 +1,12 @@
+## 1.0.0 - 2026-08-11
+
+* Aligned the Android implementation with platform interface 1.0.0.
+* Added read-only ARP neighbor table inspection via `/proc/net/arp`.
+
+## 0.3.0 - 2026-08-11
+
+* Aligned the Android implementation with platform interface 0.3.0.
+
 ## 0.2.0 - 2026-08-09
 
 * Aligned the Android implementation with platform interface 0.2.0.

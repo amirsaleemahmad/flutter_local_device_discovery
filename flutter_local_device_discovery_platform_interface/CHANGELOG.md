@@ -1,3 +1,11 @@
+## 1.0.0 - 2026-08-11
+
+* Aligned contracts and types for stable 1.0.0 release.
+
+## 0.3.0 - 2026-08-11
+
+* Aligned contracts and types for 0.3.0 release.
+
 ## 0.2.0 - 2026-08-09
 
 * Added per-session event stream filtering to prevent events leaking between concurrent sessions.
