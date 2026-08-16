@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Reachability Prober and Neighbor Table', () {
-    test('ReachabilityProber returns unreachable status on failed connections', () async {
+    test('ReachabilityProber returns unreachable status on failed connections',
+        () async {
       // Connect to an invalid address/port that will timeout/fail
       final result = await ReachabilityProber.probe(
         '254.254.254.254',
@@ -18,7 +19,9 @@ void main() {
       expect(result.methods, contains(LocalReachabilityMethod.tcpConnect));
     });
 
-    test('ReachabilityProber reports reachable when local TCP server accepts connection', () async {
+    test(
+        'ReachabilityProber reports reachable when local TCP server accepts connection',
+        () async {
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       final port = server.port;
 
@@ -38,7 +41,8 @@ void main() {
       expect(result.successfulPort, port);
     });
 
-    test('NeighborTable returns empty list or valid entries without throwing', () async {
+    test('NeighborTable returns empty list or valid entries without throwing',
+        () async {
       final entries = await NeighborTable.getEntries();
       expect(entries, isNotNull);
       if (entries.isNotEmpty) {

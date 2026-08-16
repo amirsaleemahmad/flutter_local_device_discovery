@@ -19,6 +19,8 @@ class NativeDevice {
     this.wsEndpointReference,
     this.serialNumber,
     this.model,
+    this.modelNumber,
+    this.hardwareRevision,
     this.manufacturer,
     this.identifiers = const <String, String>{},
     this.protocols = const <int>[],
@@ -26,6 +28,7 @@ class NativeDevice {
     this.lastSeenAt,
     this.ttlSeconds,
     this.confidence = 0.0,
+    this.protocolMetadata = const <String, Object?>{},
     this.metadata = const <String, Object?>{},
   });
 
@@ -44,6 +47,8 @@ class NativeDevice {
   final String? wsEndpointReference;
   final String? serialNumber;
   final String? model;
+  final String? modelNumber;
+  final String? hardwareRevision;
   final String? manufacturer;
   final Map<String, String> identifiers;
   final List<int> protocols;
@@ -51,6 +56,7 @@ class NativeDevice {
   final DateTime? lastSeenAt;
   final int? ttlSeconds;
   final double confidence;
+  final Map<String, Object?> protocolMetadata;
   final Map<String, Object?> metadata;
 
   Map<String, Object?> toMap() {
@@ -70,6 +76,8 @@ class NativeDevice {
       'wsEndpointReference': wsEndpointReference,
       'serialNumber': serialNumber,
       'model': model,
+      'modelNumber': modelNumber,
+      'hardwareRevision': hardwareRevision,
       'manufacturer': manufacturer,
       'identifiers': identifiers,
       'protocols': protocols,
@@ -77,6 +85,7 @@ class NativeDevice {
       'lastSeenAt': lastSeenAt?.toIso8601String(),
       'ttlSeconds': ttlSeconds,
       'confidence': confidence,
+      'protocolMetadata': protocolMetadata,
       'metadata': metadata,
     };
   }
@@ -125,6 +134,8 @@ class NativeDevice {
       wsEndpointReference: map['wsEndpointReference'] as String?,
       serialNumber: map['serialNumber'] as String?,
       model: map['model'] as String?,
+      modelNumber: map['modelNumber'] as String?,
+      hardwareRevision: map['hardwareRevision'] as String?,
       manufacturer: map['manufacturer'] as String?,
       identifiers: _stringStringMap(map['identifiers']),
       protocols: (map['protocols'] as List<Object?>? ?? const [])
@@ -138,6 +149,7 @@ class NativeDevice {
           : null,
       ttlSeconds: map['ttlSeconds'] as int?,
       confidence: (map['confidence'] as num?)?.toDouble() ?? 0.0,
+      protocolMetadata: _stringMap(map['protocolMetadata']),
       metadata: _stringMap(map['metadata']),
     );
   }

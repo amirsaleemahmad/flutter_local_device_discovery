@@ -1,3 +1,8 @@
+## 1.1.0 - 2026-08-16
+
+* Added `supportsCustomAdapters`, `supportsMulticastHealthCheck`, and `supportsWifiBandDetection` to `NativeDiscoveryCapabilities`.
+* Added `modelNumber`, `hardwareRevision`, and `protocolMetadata` to `NativeDevice`.
+
 ## 1.0.0 - 2026-08-11
 
 * Aligned contracts and types for stable 1.0.0 release.

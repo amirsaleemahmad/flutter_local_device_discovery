@@ -68,7 +68,7 @@ packages:
       path: "../flutter_local_device_discovery_platform_interface"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.1.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter

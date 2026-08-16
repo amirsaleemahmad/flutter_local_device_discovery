@@ -1,3 +1,7 @@
+## 1.1.0 - 2026-08-16
+
+* Updated platform interface dependency to `^1.1.0`.
+
 ## 1.0.0 - 2026-08-11
 
 * Aligned the Windows implementation with platform interface 1.0.0.

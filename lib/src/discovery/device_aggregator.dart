@@ -9,6 +9,8 @@ import '../models/local_service.dart';
 import '../models/ssdp_device.dart';
 import '../models/upnp_device_description.dart';
 import '../models/ws_discovery_device.dart';
+import '../oui/oui_vendor_resolver.dart';
+import '../decoders/iot_protocol_decoders.dart';
 import 'local_discovery_protocol.dart';
 
 /// Aggregates, enriches, classifies, and deduplicates protocol observations.
@@ -331,12 +333,39 @@ class DeviceAggregator {
     return device.endpointReference.replaceFirst('urn:uuid:', '');
   }
 
-  /// Infers device type and capabilities from DNS-SD service types.
+  /// Infers device type and capabilities from DNS-SD service types and IoT metadata.
   LocalDevice enrichFromServices(LocalDevice device) {
     var type = device.type;
     var confidence = device.confidence;
     final capabilities = <LocalDeviceCapability>{...device.capabilities};
     final evidence = <CapabilityEvidence>{...device.capabilityEvidence};
+    final protocolMetadata = <String, Object?>{...device.protocolMetadata};
+    var vendor = device.vendor;
+
+    // Resolve OUI Vendor if MAC is present
+    final mac = device.identity.macAddress ??
+        device.metadata['macAddress'] as String? ??
+        device.identity.identifiers['macAddress'];
+    if (mac != null && (vendor == null || vendor.name == null)) {
+      final manufacturer = OuiVendorResolver.lookupMac(mac);
+      if (manufacturer != null) {
+        vendor = LocalDeviceVendor(
+          name: manufacturer,
+          model: vendor?.model,
+          modelNumber: vendor?.modelNumber,
+          serialNumber: vendor?.serialNumber,
+          url: vendor?.url,
+        );
+        evidence.add(
+          CapabilityEvidence(
+            capability: 'manufacturer:$manufacturer',
+            source: 'oui_mac:$mac',
+            confidence: 0.99,
+          ),
+        );
+      }
+    }
+
     for (final service in device.services) {
       final inference = _serviceInference(service.serviceType);
       capabilities.addAll(inference.capabilities);
@@ -356,12 +385,79 @@ class DeviceAggregator {
           ),
         );
       }
+
+      // Decode Smart Home / IoT protocols
+      final st = service.serviceType.toLowerCase();
+      if (st.contains('_matter')) {
+        final matterMeta =
+            IotProtocolDecoders.decodeMatterTxt(service.textTxtRecords);
+        protocolMetadata['matter'] = matterMeta;
+        type = LocalDeviceType.smartHomeHub;
+        capabilities.add(LocalDeviceCapability.smartHome);
+      } else if (st.contains('_hap')) {
+        final hapMeta =
+            IotProtocolDecoders.decodeHapTxt(service.textTxtRecords);
+        protocolMetadata['homekit_hap'] = hapMeta;
+        if (hapMeta['model'] != null &&
+            (vendor == null || vendor.model == null)) {
+          vendor = LocalDeviceVendor(
+            name: vendor?.name,
+            model: hapMeta['model'] as String?,
+            modelNumber: vendor?.modelNumber,
+            serialNumber: vendor?.serialNumber,
+            url: vendor?.url,
+          );
+        }
+        capabilities.add(LocalDeviceCapability.smartHome);
+      } else if (st.contains('_googlecast')) {
+        final castMeta =
+            IotProtocolDecoders.decodeGoogleCastTxt(service.textTxtRecords);
+        protocolMetadata['google_cast'] = castMeta;
+        type = LocalDeviceType.mediaRenderer;
+        capabilities.addAll([
+          LocalDeviceCapability.cast,
+          LocalDeviceCapability.mediaPlayback,
+          LocalDeviceCapability.videoStreaming,
+        ]);
+        if (vendor == null || vendor.name == null) {
+          vendor = LocalDeviceVendor(
+            name: 'Google LLC',
+            model: castMeta['modelName'] as String?,
+            modelNumber: vendor?.modelNumber,
+            serialNumber: vendor?.serialNumber,
+            url: vendor?.url,
+          );
+        }
+      } else if (st.contains('_airplay') || st.contains('_raop')) {
+        final airplayMeta =
+            IotProtocolDecoders.decodeAirPlayTxt(service.textTxtRecords);
+        protocolMetadata['airplay'] = airplayMeta;
+        type = LocalDeviceType.mediaRenderer;
+        capabilities.addAll([
+          LocalDeviceCapability.airPlay,
+          LocalDeviceCapability.mediaPlayback,
+          LocalDeviceCapability.audioStreaming,
+          LocalDeviceCapability.videoStreaming,
+        ]);
+        if (vendor == null || vendor.name == null) {
+          vendor = LocalDeviceVendor(
+            name: 'Apple, Inc.',
+            model: airplayMeta['model'] as String?,
+            modelNumber: vendor?.modelNumber,
+            serialNumber: vendor?.serialNumber,
+            url: vendor?.url,
+          );
+        }
+      }
     }
+
     return device.copyWith(
       type: type,
       capabilities: capabilities,
       capabilityEvidence: evidence.toList(growable: false),
       confidence: confidence,
+      vendor: vendor,
+      protocolMetadata: protocolMetadata,
     );
   }
 

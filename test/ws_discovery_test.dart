@@ -1,5 +1,4 @@
 import 'package:flutter_local_device_discovery/flutter_local_device_discovery.dart';
-import 'package:flutter_local_device_discovery/src/models/ws_discovery_device.dart';
 import 'package:flutter_local_device_discovery/src/ws_discovery/ws_discovery_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,14 +51,16 @@ void main() {
 
     test('parses ProbeMatches correctly', () {
       final parser = const WsDiscoveryParser();
-      final results = parser.parse(probeMatchesXml, sourceAddress: '192.168.1.120');
+      final results =
+          parser.parse(probeMatchesXml, sourceAddress: '192.168.1.120');
 
       expect(results, hasLength(1));
       final device = results.first;
       expect(device.endpointReference, 'urn:uuid:device-uuid-1234');
       expect(device.types, contains('dn:NetworkVideoTransmitter'));
       expect(device.scopes, contains('onvif://www.onvif.org/name/Front_Door'));
-      expect(device.xAddrs, contains('http://192.168.1.120:80/onvif/device_service'));
+      expect(device.xAddrs,
+          contains('http://192.168.1.120:80/onvif/device_service'));
       expect(device.metadataVersion, 2);
       expect(device.sourceAddress, '192.168.1.120');
     });

@@ -12,6 +12,8 @@ import '../models/local_service.dart';
 import '../ssdp/ssdp_discovery_engine.dart';
 import '../ws_discovery/ws_discovery_engine.dart';
 import '../web/web_impl.dart';
+import '../adapters/discovery_protocol_adapter.dart';
+import '../diagnostics/multicast_health_checker.dart';
 import 'device_aggregator.dart';
 import 'local_discovery_capabilities.dart';
 import 'local_discovery_event.dart';
@@ -30,6 +32,27 @@ class FlutterLocalDeviceDiscovery {
 
   static final _SharedDiscoveryDiagnostics _sharedDiagnostics =
       _SharedDiscoveryDiagnostics();
+
+  final List<DiscoveryProtocolAdapter> _customAdapters = [];
+
+  /// Registers a custom discovery protocol adapter (e.g. CoAP, BLE-bridged).
+  void registerAdapter(DiscoveryProtocolAdapter adapter) {
+    _customAdapters.removeWhere((a) => a.protocolId == adapter.protocolId);
+    _customAdapters.add(adapter);
+  }
+
+  /// Unregisters a custom protocol adapter by its ID.
+  void unregisterAdapter(String protocolId) {
+    _customAdapters.removeWhere((a) => a.protocolId == protocolId);
+  }
+
+  /// Checks if UDP multicast traffic is operational on the current network interface.
+  Future<bool> checkMulticastHealth({
+    Duration timeout = const Duration(milliseconds: 1500),
+  }) {
+    if (kIsWeb) return Future.value(false);
+    return MulticastHealthChecker.checkMulticastHealth(timeout: timeout);
+  }
 
   /// Returns the capabilities supported by the current platform.
   Future<LocalDiscoveryCapabilities> getCapabilities() async {
@@ -55,6 +78,9 @@ class FlutterLocalDeviceDiscovery {
       supportsNeighborTable: native.supportsNeighborTable,
       supportsReachability: native.supportsReachability,
       supportsSafePortProbe: native.supportsSafePortProbe,
+      supportsCustomAdapters: true,
+      supportsMulticastHealthCheck: !kIsWeb,
+      supportsWifiBandDetection: native.supportsWifiBandDetection,
       requiresLocalNetworkPermission: native.requiresLocalNetworkPermission,
       requiresMulticastPermission: native.requiresMulticastPermission,
       platformDetails: <String, Object?>{
@@ -62,6 +88,7 @@ class FlutterLocalDeviceDiscovery {
         'sharedSsdpEngine': !kIsWeb,
         'sharedWsDiscoveryEngine': !kIsWeb,
         'secureUpnpMetadata': !kIsWeb,
+        'customAdaptersCount': _customAdapters.length,
       },
     );
   }
@@ -100,7 +127,7 @@ class FlutterLocalDeviceDiscovery {
           platform.eventsForSession(nativeSessionId).map(_eventFromNative);
     } on Object catch (error) {
       nativeStartError = error;
-      if (!ssdpEnabled && !wsEnabled) rethrow;
+      if (!ssdpEnabled && !wsEnabled && _customAdapters.isEmpty) rethrow;
     }
 
     final id = nativeSessionId ??
@@ -113,6 +140,7 @@ class FlutterLocalDeviceDiscovery {
       nativeEvents: nativeEvents,
       ssdpEngine: ssdpEnabled ? SsdpDiscoveryEngine() : null,
       wsEngine: wsEnabled ? WsDiscoveryDiscoveryEngine() : null,
+      customAdapters: List.unmodifiable(_customAdapters),
       aggregator: DeviceAggregator(),
       sharedDiagnostics: _sharedDiagnostics,
     );
@@ -151,7 +179,8 @@ class FlutterLocalDeviceDiscovery {
     LocalServiceRegistration registration,
   ) async {
     final platform = FlutterLocalDeviceDiscoveryPlatform.instance;
-    final nativeResult = await platform.registerService(registration.toNative());
+    final nativeResult =
+        await platform.registerService(registration.toNative());
     return LocalServiceRegistrationResult(
       registrationId: nativeResult.registrationId,
       assignedName: nativeResult.assignedName,
@@ -176,7 +205,7 @@ class FlutterLocalDeviceDiscovery {
         ..add(LocalDiscoveryProtocol.wsDiscovery);
     }
     return LocalDiscoveryDiagnostics(
-      pluginVersion: '0.3.0',
+      pluginVersion: '1.1.0',
       platformVersion: native.platformVersion,
       supportedProtocols: supportedProtocols,
       activeSessions: native.activeSessions > _sharedDiagnostics.activeSessions
@@ -377,6 +406,7 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
     required this.nativeEvents,
     required this.ssdpEngine,
     required this.wsEngine,
+    this.customAdapters = const <DiscoveryProtocolAdapter>[],
     required this.aggregator,
     required this.sharedDiagnostics,
   });
@@ -390,6 +420,7 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
   final Stream<LocalDiscoveryEvent> nativeEvents;
   final SsdpDiscoveryEngine? ssdpEngine;
   final WsDiscoveryDiscoveryEngine? wsEngine;
+  final List<DiscoveryProtocolAdapter> customAdapters;
   final DeviceAggregator aggregator;
   final _SharedDiscoveryDiagnostics sharedDiagnostics;
 
@@ -402,6 +433,7 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
   StreamSubscription<LocalDiscoveryEvent>? _nativeSubscription;
   StreamSubscription<SsdpEngineEvent>? _ssdpSubscription;
   StreamSubscription<WsDiscoveryEngineEvent>? _wsSubscription;
+  final List<StreamSubscription<LocalDiscoveryEvent>> _customSubscriptions = [];
   Timer? _presenceTimer;
   LocalDiscoverySessionState _state = LocalDiscoverySessionState.created;
   DateTime? _startedAt;
@@ -425,6 +457,20 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
       _handleNativeEvent,
       onError: (Object error) => _warning('Native event stream failed: $error'),
     );
+
+    for (final adapter in customAdapters) {
+      try {
+        final sub = adapter.start(request).listen(
+              _handleNativeEvent,
+              onError: (Object error) => _warning(
+                  'Custom adapter ${adapter.protocolId} failed: $error'),
+            );
+        _customSubscriptions.add(sub);
+      } catch (error) {
+        _warning(
+            'Custom adapter ${adapter.protocolId} could not start: $error');
+      }
+    }
 
     if (ssdpEngine != null) {
       _ssdpSubscription = ssdpEngine!.events.listen(
@@ -855,6 +901,15 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
     _presenceTimer?.cancel();
     _syncSsdpMetrics();
     _syncWsMetrics();
+    for (final sub in _customSubscriptions) {
+      await sub.cancel();
+    }
+    _customSubscriptions.clear();
+    for (final adapter in customAdapters) {
+      try {
+        await adapter.stop();
+      } catch (_) {}
+    }
     await _ssdpSubscription?.cancel();
     await ssdpEngine?.stop();
     await _wsSubscription?.cancel();

@@ -68,35 +68,35 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.1.0"
   flutter_local_device_discovery_android:
     dependency: "direct overridden"
     description:
       path: "../flutter_local_device_discovery_android"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.1.0"
   flutter_local_device_discovery_darwin:
     dependency: "direct overridden"
     description:
       path: "../flutter_local_device_discovery_darwin"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.1.0"
   flutter_local_device_discovery_platform_interface:
     dependency: "direct overridden"
     description:
       path: "../flutter_local_device_discovery_platform_interface"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.1.0"
   flutter_local_device_discovery_windows:
     dependency: "direct overridden"
     description:
       path: "../flutter_local_device_discovery_windows"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.1.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter

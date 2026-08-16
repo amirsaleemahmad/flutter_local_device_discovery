@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_device_discovery/flutter_local_device_discovery.dart';
+import 'package:flutter_local_device_discovery/testing.dart';
 
 void main() => runApp(const DeviceDiscoveryApp());
 
@@ -12,7 +13,7 @@ class DeviceDiscoveryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Local Discovery Review Console',
+      title: 'Local Discovery v1.1 Review Console',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
@@ -40,12 +41,25 @@ class DiscoveryDashboard extends StatefulWidget {
 class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
   static const Set<String> _serviceTypes = <String>{
     '_http._tcp',
+    '_https._tcp',
     '_ipp._tcp',
+    '_ipps._tcp',
     '_printer._tcp',
+    '_scanner._tcp',
+    '_uscan._tcp',
     '_airplay._tcp',
+    '_raop._tcp',
     '_googlecast._tcp',
+    '_matter._tcp',
+    '_hap._tcp',
+    '_hue._tcp',
+    '_spotify-connect._tcp',
+    '_sonos._tcp',
+    '_companion-link._tcp',
+    '_device-info._tcp',
     '_ssh._tcp',
     '_smb._tcp',
+    '_workstation._tcp',
   };
 
   final FlutterLocalDeviceDiscovery _discovery = FlutterLocalDeviceDiscovery();
@@ -141,6 +155,24 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
         _log('Failed to register service: $e');
       }
     }
+  }
+
+  Future<void> _checkMulticastHealth() async {
+    _log('Checking multicast network health...');
+    final isHealthy = await _discovery.checkMulticastHealth();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isHealthy
+              ? 'Multicast health check PASSED: UDP multicast traffic is operational.'
+              : 'Multicast health check WARNING: UDP multicast packets dropped or blocked by AP.',
+        ),
+        backgroundColor: isHealthy ? Colors.green : Colors.orange,
+      ),
+    );
+    _log(
+        'Multicast health check result: ${isHealthy ? "HEALTHY" : "DROPPED/BLOCKED"}');
   }
 
   Future<void> _probeAddress(String ip) async {
@@ -357,6 +389,32 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
     });
   }
 
+  void _loadDemoFixtures() {
+    setState(() {
+      for (final fixture in [
+        DeviceFixtures.hpLaserJetPrinter,
+        DeviceFixtures.appleTv,
+        DeviceFixtures.philipsHueBridge,
+        DeviceFixtures.onvifCamera,
+      ]) {
+        _devices[fixture.id] = fixture;
+        for (final service in fixture.services) {
+          _services[service.id] = service;
+        }
+      }
+    });
+    _log('Loaded 4 realistic demo Wi-Fi & Smart Home device fixtures.');
+  }
+
+  void _clearDevices() {
+    setState(() {
+      _devices.clear();
+      _services.clear();
+      _eventLog.clear();
+    });
+    _log('Cleared device lists.');
+  }
+
   void _log(String message) {
     _eventLog.insert(0, '${_clock(DateTime.now())}  $message');
     if (_eventLog.length > 12) _eventLog.removeLast();
@@ -374,10 +432,21 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text('Local Discovery'),
-            Text('v1.0.0 review console', style: TextStyle(fontSize: 12)),
+            Text('v1.1.0 review console', style: TextStyle(fontSize: 12)),
           ],
         ),
         actions: <Widget>[
+          if (devices.isNotEmpty && !_isDiscovering)
+            IconButton(
+              onPressed: _clearDevices,
+              tooltip: 'Clear devices',
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+          IconButton(
+            onPressed: _loadDemoFixtures,
+            tooltip: 'Load demo Wi-Fi & IoT devices',
+            icon: const Icon(Icons.devices_other),
+          ),
           if (_isDiscovering)
             IconButton(
               onPressed: _stopDiscovery,
@@ -456,8 +525,7 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
                     children: <Widget>[
                       Text('ARP / Neighbor Table',
                           style: Theme.of(context).textTheme.titleLarge),
-                      const Text(
-                          'Local subnet IP/MAC cache (where permitted)',
+                      const Text('Local subnet IP/MAC cache (where permitted)',
                           style: TextStyle(fontSize: 12)),
                     ],
                   ),
@@ -485,11 +553,26 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
                   itemCount: _neighborEntries.length,
                   itemBuilder: (context, index) {
                     final entry = _neighborEntries[index];
+                    final vendor =
+                        OuiVendorResolver.lookupMac(entry.macAddress);
                     return ListTile(
                       leading: const Icon(Icons.network_ping),
                       title: Text(entry.ipAddress),
-                      subtitle: Text(
-                          'MAC: ${entry.macAddress} | Interface: ${entry.interfaceName}'),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'MAC: ${entry.macAddress} | Interface: ${entry.interfaceName}'),
+                          if (vendor != null)
+                            Text(
+                              'Vendor (OUI): $vendor',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                        ],
+                      ),
                       trailing: FilledButton.tonal(
                         onPressed: () => _probeAddress(entry.ipAddress),
                         child: const Text('Probe'),
@@ -627,8 +710,24 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
+            const Divider(height: 24),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Network Health Check',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _checkMulticastHealth,
+                  icon: const Icon(Icons.health_and_safety_outlined, size: 16),
+                  label: const Text('Test Multicast'),
+                ),
+              ],
+            ),
             if (capabilities?.supportsServiceRegistration ?? false) ...<Widget>[
-              const Divider(height: 24),
+              const Divider(height: 16),
               Row(
                 children: <Widget>[
                   Expanded(
@@ -804,10 +903,12 @@ class _DeviceCard extends StatelessWidget {
                 ],
               ),
             ),
-          if (identity.manufacturer != null)
-            _DetailRow(label: 'Manufacturer', value: identity.manufacturer!),
-          if (identity.model != null)
-            _DetailRow(label: 'Model', value: identity.model!),
+          if (device.manufacturer != null)
+            _DetailRow(label: 'Manufacturer', value: device.manufacturer!),
+          if (device.model != null)
+            _DetailRow(label: 'Model', value: device.model!),
+          if (device.modelNumber != null)
+            _DetailRow(label: 'Model Number', value: device.modelNumber!),
           if (identity.serialNumber != null)
             _DetailRow(label: 'Serial', value: identity.serialNumber!),
           if (identity.upnpUdn != null)
@@ -817,6 +918,37 @@ class _DeviceCard extends StatelessWidget {
               label: 'WS Endpoint',
               value: identity.wsEndpointReference!,
             ),
+          if (device.protocolMetadata.isNotEmpty) ...<Widget>[
+            const Divider(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Decoded IoT Metadata (v1.1)',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...device.protocolMetadata.entries.map((entry) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${entry.key}: ${entry.value}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                  ),
+                ),
+              );
+            }),
+          ],
           if (device.metadata['ssdpLocation'] case final String location)
             _DetailRow(label: 'Description', value: location),
           if (device.metadata['ssdpSearchTarget'] case final String target)

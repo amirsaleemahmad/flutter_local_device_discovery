@@ -10,6 +10,9 @@ class NativeDiscoveryCapabilities {
     this.supportsNeighborTable = false,
     this.supportsReachability = false,
     this.supportsSafePortProbe = false,
+    this.supportsCustomAdapters = true,
+    this.supportsMulticastHealthCheck = true,
+    this.supportsWifiBandDetection = false,
     this.requiresLocalNetworkPermission = false,
     this.requiresMulticastPermission = false,
     this.platformDetails = const <String, Object?>{},
@@ -24,6 +27,9 @@ class NativeDiscoveryCapabilities {
   final bool supportsNeighborTable;
   final bool supportsReachability;
   final bool supportsSafePortProbe;
+  final bool supportsCustomAdapters;
+  final bool supportsMulticastHealthCheck;
+  final bool supportsWifiBandDetection;
   final bool requiresLocalNetworkPermission;
   final bool requiresMulticastPermission;
   final Map<String, Object?> platformDetails;
@@ -39,6 +45,9 @@ class NativeDiscoveryCapabilities {
       'supportsNeighborTable': supportsNeighborTable,
       'supportsReachability': supportsReachability,
       'supportsSafePortProbe': supportsSafePortProbe,
+      'supportsCustomAdapters': supportsCustomAdapters,
+      'supportsMulticastHealthCheck': supportsMulticastHealthCheck,
+      'supportsWifiBandDetection': supportsWifiBandDetection,
       'requiresLocalNetworkPermission': requiresLocalNetworkPermission,
       'requiresMulticastPermission': requiresMulticastPermission,
       'platformDetails': platformDetails,
@@ -69,6 +78,11 @@ class NativeDiscoveryCapabilities {
       supportsNeighborTable: map['supportsNeighborTable'] as bool? ?? false,
       supportsReachability: map['supportsReachability'] as bool? ?? false,
       supportsSafePortProbe: map['supportsSafePortProbe'] as bool? ?? false,
+      supportsCustomAdapters: map['supportsCustomAdapters'] as bool? ?? true,
+      supportsMulticastHealthCheck:
+          map['supportsMulticastHealthCheck'] as bool? ?? true,
+      supportsWifiBandDetection:
+          map['supportsWifiBandDetection'] as bool? ?? false,
       requiresLocalNetworkPermission:
           map['requiresLocalNetworkPermission'] as bool? ?? false,
       requiresMulticastPermission:

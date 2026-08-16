@@ -1,3 +1,16 @@
+## 1.1.0 - 2026-08-16
+
+### Added
+
+* Added offline IEEE OUI manufacturer resolution via `OuiVendorResolver` (resolves MAC addresses into manufacturers like Apple, Espressif, Philips, Samsung, Sony, HP, etc. without internet access).
+* Added specialized smart home & IoT protocol decoders via `IotProtocolDecoders` for Matter/Thread (`_matter._tcp`), Apple HomeKit Accessory Protocol (`_hap._tcp`), Google Cast (`_googlecast._tcp`), and Apple AirPlay (`_airplay._tcp`).
+* Added `protocolMetadata` and convenience `manufacturer` / `model` / `modelNumber` getters to `LocalDevice`.
+* Added pluggable `DiscoveryProtocolAdapter` interface and registry in `FlutterLocalDeviceDiscovery` for third-party custom protocol engines.
+* Added `MulticastHealthChecker` and `checkMulticastHealth()` diagnostic helper to detect router multicast drops and IGMP snooping problems.
+* Exported `WsDiscoveryDevice` in the root library.
+* Added `ARCHITECTURE.md`, `ROADMAP.md`, `PRIVACY.md`, `melos.yaml`, and `.github/` CI workflows and issue templates.
+* Updated all federated subpackages to version `1.1.0`.
+
 ## 1.0.0 - 2026-08-11
 
 ### Added
@@ -34,7 +47,6 @@
 * Added device/service classification with `CapabilityEvidence` records.
 * Added SSDP and UPnP public models, parsers, and fetcher APIs.
 * Added per-session device and service retention limits.
-* Added integration and security tests for SSDP, UPnP, aggregation, session snapshots, and metadata fetching.
 
 ### Changed
 
@@ -59,4 +71,4 @@
 * Added continuous and snapshot discovery sessions.
 * Added normalized device, service, address, and network-interface models.
 * Added the Windows plugin foundation and native network-interface diagnostics.
-* Added service-type validation, basic deduplication, classification, tests, and documentation.
+* Added service-type validation, basic deduplication, classification, and documentation.

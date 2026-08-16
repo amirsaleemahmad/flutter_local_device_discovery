@@ -12,6 +12,9 @@ class LocalDiscoveryCapabilities {
     this.supportsNeighborTable = false,
     this.supportsReachability = false,
     this.supportsSafePortProbe = false,
+    this.supportsCustomAdapters = true,
+    this.supportsMulticastHealthCheck = true,
+    this.supportsWifiBandDetection = false,
     this.requiresLocalNetworkPermission = false,
     this.requiresMulticastPermission = false,
     this.platformDetails = const <String, Object?>{},
@@ -43,6 +46,15 @@ class LocalDiscoveryCapabilities {
 
   /// Whether this platform supports safe port probing.
   final bool supportsSafePortProbe;
+
+  /// Whether custom protocol adapters can be registered.
+  final bool supportsCustomAdapters;
+
+  /// Whether multicast health loopback checks are supported.
+  final bool supportsMulticastHealthCheck;
+
+  /// Whether Wi-Fi frequency band detection is supported.
+  final bool supportsWifiBandDetection;
 
   /// Whether this platform requires local network permission.
   final bool requiresLocalNetworkPermission;

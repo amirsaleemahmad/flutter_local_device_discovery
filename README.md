@@ -4,28 +4,29 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/X8Y824GXT3)
 
-Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 1.0 combines native mDNS/DNS-SD browsing with SSDP, WS-Discovery, service registration/advertisement, reachability checks, secure UPnP/SOAP metadata, and cross-protocol device aggregation.
+Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 1.1 combines native mDNS/DNS-SD browsing with SSDP, WS-Discovery, offline IEEE OUI manufacturer resolution, specialized smart home decoders (Matter, HomeKit HAP, Google Cast, AirPlay), custom protocol adapters, reachability checks, and multicast health diagnostics.
 
 ## Features
 
-- Native Android NSD and Apple Network framework service discovery
-- mDNS, DNS-SD, and Bonjour browsing and resolution
-- Active SSDP M-SEARCH across eligible IPv4 interfaces
-- Passive SSDP alive, update, byebye, and cache-expiry handling
-- Secure, bounded UPnP device-description retrieval
-- Snapshot and continuous discovery sessions
+- Native Android NSD, Apple Network framework, and Windows DNS-SD service discovery
+- mDNS, DNS-SD, and Bonjour browsing, service resolution, and dynamic TXT updates
+- Active SSDP M-SEARCH and passive SSDP alive/update/byebye monitoring
+- WS-Discovery (SOAP/UDP) targeting ONVIF IP security cameras and enterprise equipment
+- Offline IEEE OUI manufacturer resolution for discovered MAC addresses
+- Smart home & IoT protocol decoders (Matter/Thread, HomeKit HAP, Google Cast, AirPlay)
+- Modular `DiscoveryProtocolAdapter` API for integrating custom discovery engines
+- Multicast health diagnostics to detect router multicast drops / IGMP snooping
+- Secure, bounded UPnP device-description retrieval with anti-SSRF protections
 - Cross-protocol deduplication by UDN, hostname, address, and service identity
 - Device classification with inspectable capability evidence
-- IPv4/IPv6 and network-interface-aware models
-- Readiness checks, live events, warnings, and diagnostics
 
 ## Platform support
 
 | Platform | Minimum | Discovery support |
 | --- | --- | --- |
-| Android | API 21 | Native NSD plus SSDP/UPnP |
-| iOS | 13.0 | Network framework plus SSDP/UPnP |
-| macOS | 10.15 | Network framework plus SSDP/UPnP |
+| Android | API 21 | Native NSD plus SSDP/UPnP and WS-Discovery |
+| iOS | 13.0 | Network framework plus SSDP/UPnP and WS-Discovery |
+| macOS | 10.15 | Network framework plus SSDP/UPnP and WS-Discovery |
 | Windows | Flutter-supported versions | Native DNS-SD/mDNS browsing, resolution, and service registration; SSDP/UPnP and WS-Discovery |
 | Web | — | API compiles and reports unsupported; browsers cannot open the required multicast sockets |
 
@@ -37,7 +38,7 @@ Add the package to your application:
 
 ```yaml
 dependencies:
-  flutter_local_device_discovery: ^1.0.0
+  flutter_local_device_discovery: ^1.1.0
 ```
 
 Then run `flutter pub get`.
@@ -192,6 +193,22 @@ Add the same `NSLocalNetworkUsageDescription` and `NSBonjourServices` entries to
 <key>com.apple.security.network.server</key>
 <true/>
 ```
+
+#### Enabling Local Network Access (macOS & iOS)
+
+If you encounter `Network.NWError error -65555 - NoAuth` or no devices appear, verify that Local Network permissions are enabled:
+
+**On macOS:**
+1. Open **System Settings** ( > System Settings).
+2. Click **Privacy & Security** in the sidebar.
+3. Scroll down and click **Local Network**.
+4. Find **`device_discovery`** (or **`Runner`** / your terminal or IDE if running in debug mode) and toggle the switch to **ON (Enabled)**.
+5. Re-open or re-run the app.
+
+**On iOS:**
+1. Open the **Settings** app on the iPhone/iPad.
+2. Scroll down to **`Device Discovery`** (or **Privacy & Security > Local Network**).
+3. Ensure the **Local Network** switch is turned **ON**.
 
 ### Windows
 

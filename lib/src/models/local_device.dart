@@ -27,6 +27,7 @@ class LocalDevice {
     this.lastSeenAt,
     this.advertisedTtl,
     this.confidence = 0.0,
+    this.protocolMetadata = const <String, Object?>{},
     this.metadata = const <String, Object?>{},
   });
 
@@ -81,8 +82,20 @@ class LocalDevice {
   /// A confidence score (0.0 to 1.0) for the device classification.
   final double confidence;
 
+  /// Decoded IoT and smart home protocol metadata (Matter, HAP, Cast, AirPlay).
+  final Map<String, Object?> protocolMetadata;
+
   /// Additional metadata about this device.
   final Map<String, Object?> metadata;
+
+  /// Convenience getter for the hardware manufacturer name.
+  String? get manufacturer => vendor?.name;
+
+  /// Convenience getter for the device model name.
+  String? get model => vendor?.model;
+
+  /// Convenience getter for the model number.
+  String? get modelNumber => vendor?.modelNumber;
 
   /// Returns the first IPv4 address, if any.
   InternetAddressValue? get ipv4Address {
@@ -124,6 +137,7 @@ class LocalDevice {
     DateTime? lastSeenAt,
     Duration? advertisedTtl,
     double? confidence,
+    Map<String, Object?>? protocolMetadata,
     Map<String, Object?>? metadata,
   }) {
     return LocalDevice(
@@ -144,6 +158,7 @@ class LocalDevice {
       lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       advertisedTtl: advertisedTtl ?? this.advertisedTtl,
       confidence: confidence ?? this.confidence,
+      protocolMetadata: protocolMetadata ?? this.protocolMetadata,
       metadata: metadata ?? this.metadata,
     );
   }

@@ -93,7 +93,8 @@ class WsDiscoveryParser {
         .toList(growable: false);
 
     final metaVerStr = _text(_child(element, 'MetadataVersion'));
-    final metadataVersion = metaVerStr != null ? int.tryParse(metaVerStr) : null;
+    final metadataVersion =
+        metaVerStr != null ? int.tryParse(metaVerStr) : null;
 
     return WsDiscoveryDevice(
       endpointReference: addr,

@@ -348,12 +348,16 @@ class DiscoverySession {
       case .ready:
         break
       case .failed(let error):
+        var errorMsg = error.localizedDescription
+        if errorMsg.contains("-65555") || errorMsg.contains("NoAuth") {
+          errorMsg = "Local network access is not authorized (NWError -65555 NoAuth). Please enable 'Local Network' permission in macOS System Settings > Privacy & Security > Local Network (or iOS Settings)."
+        }
         self.onEvent([
           "type": 9, // LocalDiscoveryFailure
           "sessionId": self.sessionId,
           "protocol": 2,
-          "errorCode": "discovery_start_failed",
-          "errorMessage": error.localizedDescription,
+          "errorCode": "local_network_permission_denied",
+          "errorMessage": errorMsg,
           "timestamp": isoTimestamp(),
         ])
       default:
