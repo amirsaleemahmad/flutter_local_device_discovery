@@ -125,4 +125,57 @@ class LocalService {
         'port: $port, '
         'resolved: $resolved)';
   }
+
+  /// Converts this service to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'instanceName': instanceName,
+        'serviceType': serviceType,
+        'domain': domain,
+        if (hostname != null) 'hostname': hostname,
+        'addresses': addresses.map((e) => e.toJson()).toList(),
+        if (port != null) 'port': port,
+        'transport': transport.name,
+        'rawTxtRecords': rawTxtRecords.map((k, v) => MapEntry(k, v.toList())),
+        'textTxtRecords': textTxtRecords,
+        'discoveredBy': discoveredBy.map((e) => e.name).toList(),
+        if (firstSeenAt != null) 'firstSeenAt': firstSeenAt!.toIso8601String(),
+        if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+        if (ttl != null) 'ttl': ttl!.inMilliseconds,
+        'resolved': resolved,
+        if (location != null) 'location': location!.toString(),
+        'metadata': metadata,
+      };
+
+  /// Creates a [LocalService] from a JSON-compatible map.
+  factory LocalService.fromJson(Map<String, Object?> json) {
+    return LocalService(
+      id: json['id'] as String,
+      instanceName: json['instanceName'] as String,
+      serviceType: json['serviceType'] as String,
+      domain: json['domain'] as String,
+      hostname: json['hostname'] as String?,
+      addresses: (json['addresses'] as List<dynamic>?)
+              ?.map((e) => InternetAddressValue.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <InternetAddressValue>[],
+      port: json['port'] as int?,
+      transport: LocalTransportProtocol.values.byName(json['transport'] as String? ?? 'tcp'),
+      rawTxtRecords: (json['rawTxtRecords'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, Uint8List.fromList((v as List<dynamic>).cast<int>())),
+          ) ??
+          const <String, Uint8List>{},
+      textTxtRecords: (json['textTxtRecords'] as Map<String, dynamic>?)?.cast<String, String>() ?? const <String, String>{},
+      discoveredBy: (json['discoveredBy'] as List<dynamic>?)
+              ?.map((e) => LocalDiscoveryProtocol.values.byName(e as String))
+              .toSet() ??
+          const <LocalDiscoveryProtocol>{},
+      firstSeenAt: json['firstSeenAt'] != null ? DateTime.parse(json['firstSeenAt'] as String) : null,
+      lastSeenAt: json['lastSeenAt'] != null ? DateTime.parse(json['lastSeenAt'] as String) : null,
+      ttl: json['ttl'] != null ? Duration(milliseconds: json['ttl'] as int) : null,
+      resolved: json['resolved'] as bool? ?? false,
+      location: json['location'] != null ? Uri.parse(json['location'] as String) : null,
+      metadata: (json['metadata'] as Map<String, dynamic>?)?.cast<String, Object?>() ?? const <String, Object?>{},
+    );
+  }
 }

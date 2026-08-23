@@ -53,6 +53,25 @@ class FlutterLocalDeviceDiscoveryPlugin : public flutter::Plugin {
   void HandleUpdateRegisteredService(
       const flutter::MethodCall<flutter::EncodableValue>& method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleStartNativeSsdp(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleStopNativeSsdp(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleStartNativeWsDiscovery(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleStopNativeWsDiscovery(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleGetNetworkInfo(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleGetGatewayInfo(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
   void HandleUnregisterService(
       const flutter::MethodCall<flutter::EncodableValue>& method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
@@ -60,6 +79,7 @@ class FlutterLocalDeviceDiscoveryPlugin : public flutter::Plugin {
   flutter::PluginRegistrarWindows* registrar_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
   DiscoveryEventStreamHandler* stream_handler_;
+  void* ws_discovery_engine_{nullptr};
   std::unordered_map<std::string, std::unique_ptr<DiscoverySession>> sessions_;
   std::unordered_map<std::string, std::unique_ptr<RegisteredService>> registered_services_;
 };

@@ -159,6 +159,104 @@ class IotProtocolDecoders {
     return result;
   }
 
+  /// Decodes Spotify Connect DNS-SD TXT records (`_spotify-connect._tcp`).
+  static Map<String, Object?> decodeSpotifyConnectTxt(Map<String, String> txt) {
+    final result = <String, Object?>{'protocol': 'spotify_connect'};
+    
+    if (txt.containsKey('CPath')) result['cPath'] = txt['CPath'];
+    if (txt.containsKey('VERSION')) result['version'] = txt['VERSION'];
+    if (txt.containsKey('Stack')) result['stack'] = txt['Stack'];
+    
+    return result;
+  }
+
+  /// Decodes Sonos DNS-SD TXT records (`_sonos._tcp`).
+  static Map<String, Object?> decodeSonosTxt(Map<String, String> txt) {
+    final result = <String, Object?>{'protocol': 'sonos'};
+    
+    if (txt.containsKey('info')) result['info'] = txt['info'];
+    if (txt.containsKey('vers')) result['firmwareVersion'] = txt['vers'];
+    if (txt.containsKey('protovers')) result['protocolVersion'] = txt['protovers'];
+    if (txt.containsKey('mdl')) result['model'] = txt['mdl'];
+    if (txt.containsKey('hhid')) result['householdId'] = txt['hhid'];
+    if (txt.containsKey('bootseq')) {
+      result['bootSequence'] = int.tryParse(txt['bootseq']!) ?? txt['bootseq'];
+    }
+    
+    return result;
+  }
+
+  /// Decodes MQTT DNS-SD TXT records (`_mqtt._tcp`).
+  static Map<String, Object?> decodeMqttTxt(Map<String, String> txt) {
+    final result = <String, Object?>{'protocol': 'mqtt'};
+    result.addAll(txt);
+    return result;
+  }
+
+  /// Decodes Home Assistant DNS-SD TXT records (`_home-assistant._tcp`).
+  static Map<String, Object?> decodeHomeAssistantTxt(Map<String, String> txt) {
+    final result = <String, Object?>{'protocol': 'home_assistant'};
+    
+    if (txt.containsKey('base_url')) result['baseUrl'] = txt['base_url'];
+    if (txt.containsKey('version')) result['version'] = txt['version'];
+    if (txt.containsKey('uuid')) result['uuid'] = txt['uuid'];
+    if (txt.containsKey('location_name')) result['locationName'] = txt['location_name'];
+    if (txt.containsKey('requires_api_password')) {
+      result['requiresApiPassword'] = txt['requires_api_password'] == 'true';
+    }
+    if (txt.containsKey('internal_url')) result['internalUrl'] = txt['internal_url'];
+    if (txt.containsKey('external_url')) result['externalUrl'] = txt['external_url'];
+    
+    return result;
+  }
+
+  /// Decodes IPP / IPPS DNS-SD TXT records (`_ipp._tcp`, `_ipps._tcp`).
+  static Map<String, Object?> decodeIppTxt(Map<String, String> txt) {
+    final result = <String, Object?>{'protocol': 'ipp'};
+    
+    if (txt.containsKey('ty')) result['printerMakeAndModel'] = txt['ty'];
+    if (txt.containsKey('product')) result['productDescription'] = txt['product'];
+    if (txt.containsKey('pdl')) result['pageDescriptionLanguages'] = txt['pdl'];
+    if (txt.containsKey('Color')) result['supportsColor'] = txt['Color'] == 'T';
+    if (txt.containsKey('Duplex')) result['supportsDuplex'] = txt['Duplex'] == 'T';
+    if (txt.containsKey('Copies')) result['maxCopies'] = txt['Copies'];
+    if (txt.containsKey('URF')) result['urfSupport'] = txt['URF'];
+    if (txt.containsKey('rp')) result['resourcePath'] = txt['rp'];
+    if (txt.containsKey('UUID')) result['uuid'] = txt['UUID'];
+    if (txt.containsKey('txtvers')) result['txtVersion'] = txt['txtvers'];
+    if (txt.containsKey('qtotal')) {
+      result['queueTotal'] = int.tryParse(txt['qtotal']!) ?? txt['qtotal'];
+    }
+    if (txt.containsKey('priority')) {
+      result['priority'] = int.tryParse(txt['priority']!) ?? txt['priority'];
+    }
+    if (txt.containsKey('adminurl')) result['adminUrl'] = txt['adminurl'];
+    
+    return result;
+  }
+
+  /// Decodes DLNA UPnP AV metadata.
+  static Map<String, Object?> decodeDlnaTxt(Map<String, String> txt) {
+    final result = <String, Object?>{'protocol': 'dlna'};
+    
+    final deviceType = txt['deviceType'] ?? txt['ST'] ?? txt['NT'] ?? '';
+    if (deviceType.contains('MediaRenderer')) {
+      result['deviceClass'] = 'MediaRenderer';
+    } else if (deviceType.contains('MediaServer')) {
+      result['deviceClass'] = 'MediaServer';
+    }
+    
+    if (txt.containsKey('friendlyName')) result['friendlyName'] = txt['friendlyName'];
+    if (txt.containsKey('manufacturer')) result['manufacturer'] = txt['manufacturer'];
+    if (txt.containsKey('modelName')) {
+      result['model'] = txt['modelName'];
+    } else if (txt.containsKey('model')) {
+      result['model'] = txt['model'];
+    }
+    
+    return result;
+  }
+
   static String _hapCategoryName(int? ci) {
     return switch (ci) {
       1 => 'Other',

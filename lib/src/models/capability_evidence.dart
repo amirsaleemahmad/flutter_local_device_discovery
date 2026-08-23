@@ -42,4 +42,17 @@ class CapabilityEvidence {
   @override
   String toString() =>
       'CapabilityEvidence($capability from $source, confidence: $confidence)';
+
+  /// Converts this evidence to a JSON-compatible map.
+  Map<String, Object?> toJson() => toMap();
+
+  /// Creates a [CapabilityEvidence] from a JSON-compatible map.
+  factory CapabilityEvidence.fromJson(Map<String, Object?> json) {
+    return CapabilityEvidence(
+      capability: json['capability'] as String,
+      source: json['source'] as String,
+      confidence: (json['confidence'] as num).toDouble(),
+      detail: json['detail'] as String?,
+    );
+  }
 }

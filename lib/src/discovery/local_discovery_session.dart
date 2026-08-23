@@ -84,4 +84,32 @@ class LocalDiscoverySnapshot {
 
   /// The duration of the discovery.
   final Duration duration;
+
+  /// Converts this snapshot to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'sessionId': sessionId,
+        'devices': devices.map((e) => e.toJson()).toList(),
+        'services': services.map((e) => e.toJson()).toList(),
+        if (startedAt != null) 'startedAt': startedAt!.toIso8601String(),
+        if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+        'duration': duration.inMilliseconds,
+      };
+
+  /// Creates a [LocalDiscoverySnapshot] from a JSON-compatible map.
+  factory LocalDiscoverySnapshot.fromJson(Map<String, Object?> json) {
+    return LocalDiscoverySnapshot(
+      sessionId: json['sessionId'] as String,
+      devices: (json['devices'] as List<dynamic>?)
+              ?.map((e) => LocalDevice.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <LocalDevice>[],
+      services: (json['services'] as List<dynamic>?)
+              ?.map((e) => LocalService.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <LocalService>[],
+      startedAt: json['startedAt'] != null ? DateTime.parse(json['startedAt'] as String) : null,
+      completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt'] as String) : null,
+      duration: Duration(milliseconds: json['duration'] as int? ?? 0),
+    );
+  }
 }

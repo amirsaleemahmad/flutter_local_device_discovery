@@ -92,4 +92,72 @@ abstract class FlutterLocalDeviceDiscoveryPlatform extends PlatformInterface {
   Future<NativeDiscoveryDiagnostics> getDiagnostics() {
     throw UnimplementedError('getDiagnostics() has not been implemented.');
   }
+
+  /// Starts the native SSDP discovery engine.
+  /// Returns a session ID for the SSDP engine.
+  Future<String> startNativeSsdp({
+    required List<String> searchTargets,
+    required int searchIntervalMs,
+    required bool includeLoopback,
+    required bool includeLinkLocal,
+    required bool includeVpnInterfaces,
+  }) {
+    throw UnimplementedError('startNativeSsdp() has not been implemented.');
+  }
+
+  /// Stops the native SSDP discovery engine.
+  Future<void> stopNativeSsdp(String sessionId) {
+    throw UnimplementedError('stopNativeSsdp() has not been implemented.');
+  }
+
+  /// Returns a stream of native SSDP events.
+  Stream<NativeDiscoveryEvent> nativeSsdpEvents(String sessionId) {
+    throw UnimplementedError('nativeSsdpEvents() has not been implemented.');
+  }
+
+  /// Starts the native WS-Discovery engine.
+  Future<String> startNativeWsDiscovery({
+    required List<String> wsDiscoveryTypes,
+    required int searchIntervalMs,
+    required bool includeLoopback,
+    required bool includeLinkLocal,
+    required bool includeVpnInterfaces,
+  }) {
+    throw UnimplementedError('startNativeWsDiscovery() has not been implemented.');
+  }
+
+  /// Stops the native WS-Discovery engine.
+  Future<void> stopNativeWsDiscovery(String sessionId) {
+    throw UnimplementedError('stopNativeWsDiscovery() has not been implemented.');
+  }
+
+  /// Returns a stream of native WS-Discovery events.
+  Stream<NativeDiscoveryEvent> nativeWsDiscoveryEvents(String sessionId) {
+    throw UnimplementedError('nativeWsDiscoveryEvents() has not been implemented.');
+  }
+
+  /// Returns network info (SSID, BSSID, signal, gateway, etc.).
+  Future<Map<String, Object?>> getNetworkInfo() {
+    throw UnimplementedError('getNetworkInfo() has not been implemented.');
+  }
+
+  /// Pings a host using native ICMP.
+  Future<Map<String, Object?>> icmpPing(String address, int timeoutMs) {
+    throw UnimplementedError('icmpPing() has not been implemented.');
+  }
+
+  /// Returns gateway info for network topology.
+  Future<Map<String, Object?>> getGatewayInfo() {
+    throw UnimplementedError('getGatewayInfo() has not been implemented.');
+  }
+
+  /// Checks discovery-related permissions.
+  Future<Map<String, Object?>> checkPermissions() {
+    throw UnimplementedError('checkPermissions() has not been implemented.');
+  }
+
+  /// Requests discovery-related permissions.
+  Future<Map<String, Object?>> requestPermissions(List<int> permissionTypes) {
+    throw UnimplementedError('requestPermissions() has not been implemented.');
+  }
 }

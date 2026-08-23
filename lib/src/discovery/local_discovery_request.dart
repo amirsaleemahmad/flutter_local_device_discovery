@@ -55,9 +55,6 @@ class LocalDiscoveryRequest {
   final Set<String> ssdpSearchTargets;
 
   /// Reserved WS-Discovery types.
-  ///
-  /// WS-Discovery is not implemented in v0.2.0. Supplying values does not
-  /// enable discovery unless a future platform implementation advertises it.
   final Set<String> wsDiscoveryTypes;
 
   /// The maximum duration of a snapshot discovery.
@@ -117,14 +114,10 @@ class LocalDiscoveryRequest {
   /// Maximum number of services retained by a session.
   final int maxServices;
 
-  /// Reserved safe-port-probe configuration.
-  ///
-  /// Safe port probing is not implemented in v0.2.0.
+  /// Configuration for safe TCP port probing.
   final SafePortProbeConfig? safePortProbe;
 
-  /// Reserved host-discovery configuration.
-  ///
-  /// Neighbor-table and reachability discovery are not implemented in v0.2.0.
+  /// Configuration for host discovery via neighbor table and reachability probing.
   final HostDiscoveryConfig? hostDiscovery;
 
   /// Optional device filter.
@@ -180,7 +173,7 @@ class LocalDiscoveryRequest {
   }
 }
 
-/// Reserved configuration for safe port probing in a future release.
+/// Configuration for safe TCP port probing during discovery.
 class SafePortProbeConfig {
   const SafePortProbeConfig({
     this.ports = const <int>[],
@@ -202,7 +195,7 @@ class SafePortProbeConfig {
   final int maxConcurrentProbes;
 }
 
-/// Reserved configuration for host discovery in a future release.
+/// Configuration for host discovery via neighbor table and ICMP reachability.
 class HostDiscoveryConfig {
   const HostDiscoveryConfig({
     this.enabled = false,

@@ -13,7 +13,7 @@ class DeviceDiscoveryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Local Discovery v1.1 Review Console',
+      title: 'Local Discovery v2.0 Console',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
@@ -309,9 +309,9 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
       session = await _discovery.start(request);
       _session = session;
       _eventSubscription = session.events.listen(_handleEvent);
+      
+      // Keep session running in real-time until duration ends or user taps stop.
       final snapshot = await session.snapshot();
-      await _eventSubscription?.cancel();
-      await session.stop();
       final diagnostics = await _discovery.getDiagnostics();
 
       if (!mounted) return;
@@ -332,23 +332,24 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
     } on Object catch (error) {
       if (mounted) setState(() => _error = 'Discovery failed: $error');
     } finally {
-      await _eventSubscription?.cancel();
-      if (session != null &&
-          session.state != LocalDiscoverySessionState.stopped) {
-        await session.stop();
-      }
-      if (mounted) {
+      if (mounted && _session == null) {
         setState(() {
           _isDiscovering = false;
-          _session = null;
-          _eventSubscription = null;
         });
       }
     }
   }
 
   Future<void> _stopDiscovery() async {
+    await _eventSubscription?.cancel();
     await _session?.stop();
+    if (mounted) {
+      setState(() {
+        _isDiscovering = false;
+        _session = null;
+        _eventSubscription = null;
+      });
+    }
   }
 
   void _handleEvent(LocalDiscoveryEvent event) {
@@ -431,8 +432,8 @@ class _DiscoveryDashboardState extends State<DiscoveryDashboard> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Local Discovery'),
-            Text('v1.1.0 review console', style: TextStyle(fontSize: 12)),
+            Text('Local Device Discovery'),
+            Text('v2.0.0 Console', style: TextStyle(fontSize: 12)),
           ],
         ),
         actions: <Widget>[

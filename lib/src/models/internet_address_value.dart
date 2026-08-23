@@ -137,4 +137,30 @@ class InternetAddressValue {
 
   @override
   String toString() => address;
+
+  /// Converts this value to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'address': address,
+        'family': family,
+        if (scopeId != null) 'scopeId': scopeId,
+        if (interfaceName != null) 'interfaceName': interfaceName,
+        'isLoopback': isLoopback,
+        'isLinkLocal': isLinkLocal,
+        'isPrivate': isPrivate,
+        'isMulticast': isMulticast,
+      };
+
+  /// Creates an [InternetAddressValue] from a JSON-compatible map.
+  factory InternetAddressValue.fromJson(Map<String, Object?> json) {
+    return InternetAddressValue(
+      address: json['address'] as String,
+      family: json['family'] as int,
+      scopeId: json['scopeId'] as int?,
+      interfaceName: json['interfaceName'] as String?,
+      isLoopback: json['isLoopback'] as bool? ?? false,
+      isLinkLocal: json['isLinkLocal'] as bool? ?? false,
+      isPrivate: json['isPrivate'] as bool? ?? false,
+      isMulticast: json['isMulticast'] as bool? ?? false,
+    );
+  }
 }

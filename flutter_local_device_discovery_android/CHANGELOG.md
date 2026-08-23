@@ -1,3 +1,10 @@
+## 2.0.0 - 2026-08-20
+
+* Added native Kotlin SSDP engine via `MulticastSocket` and `WifiManager.MulticastLock`.
+* Added native Kotlin WS-Discovery engine.
+* Added native Wi-Fi information gathering and gateway detection via `WifiManager` and `ConnectivityManager`.
+* Updated platform interface dependency to `^2.0.0`.
+
 ## 1.1.0 - 2026-08-16
 
 * Updated platform interface dependency to `^1.1.0`.

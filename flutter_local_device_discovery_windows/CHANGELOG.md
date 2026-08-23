@@ -1,3 +1,10 @@
+## 2.0.0 - 2026-08-20
+
+* Added native C++ SSDP and WS-Discovery engines via Winsock2 multicast sockets.
+* Added native Wi-Fi information gathering via `wlanapi.h`.
+* Added gateway detection via `GetAdaptersAddresses` / `iphlpapi.lib`.
+* Updated platform interface dependency to `^2.0.0`.
+
 ## 1.1.0 - 2026-08-16
 
 * Updated platform interface dependency to `^1.1.0`.

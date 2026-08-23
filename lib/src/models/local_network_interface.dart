@@ -131,4 +131,41 @@ class LocalNetworkInterface {
         'isUp: $isUp, '
         'isDefault: $isDefault)';
   }
+
+  /// Converts this interface to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        if (displayName != null) 'displayName': displayName,
+        'type': type.name,
+        'addresses': addresses.map((e) => e.toJson()).toList(),
+        'isUp': isUp,
+        'isDefault': isDefault,
+        'supportsMulticast': supportsMulticast,
+        'isMetered': isMetered,
+        'isVpn': isVpn,
+        if (interfaceIndex != null) 'interfaceIndex': interfaceIndex,
+        'platformDetails': platformDetails,
+      };
+
+  /// Creates a [LocalNetworkInterface] from a JSON-compatible map.
+  factory LocalNetworkInterface.fromJson(Map<String, Object?> json) {
+    return LocalNetworkInterface(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      displayName: json['displayName'] as String?,
+      type: LocalInterfaceType.values.byName(json['type'] as String? ?? 'unknown'),
+      addresses: (json['addresses'] as List<dynamic>?)
+              ?.map((e) => InternetAddressValue.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <InternetAddressValue>[],
+      isUp: json['isUp'] as bool? ?? false,
+      isDefault: json['isDefault'] as bool? ?? false,
+      supportsMulticast: json['supportsMulticast'] as bool? ?? false,
+      isMetered: json['isMetered'] as bool? ?? false,
+      isVpn: json['isVpn'] as bool? ?? false,
+      interfaceIndex: json['interfaceIndex'] as int?,
+      platformDetails: (json['platformDetails'] as Map<String, dynamic>?)?.cast<String, Object?>() ?? const <String, Object?>{},
+    );
+  }
 }

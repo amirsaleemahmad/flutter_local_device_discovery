@@ -64,4 +64,28 @@ class WsDiscoveryDevice {
   @override
   String toString() =>
       'WsDiscoveryDevice(endpoint: $endpointReference, types: $types, xAddrs: $xAddrs)';
+
+  /// Converts this device to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'endpointReference': endpointReference,
+        'types': types,
+        'scopes': scopes,
+        'xAddrs': xAddrs,
+        if (metadataVersion != null) 'metadataVersion': metadataVersion,
+        if (sourceAddress != null) 'sourceAddress': sourceAddress,
+        if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+      };
+
+  /// Creates a [WsDiscoveryDevice] from a JSON-compatible map.
+  factory WsDiscoveryDevice.fromJson(Map<String, Object?> json) {
+    return WsDiscoveryDevice(
+      endpointReference: json['endpointReference'] as String,
+      types: (json['types'] as List<dynamic>?)?.cast<String>() ?? const <String>[],
+      scopes: (json['scopes'] as List<dynamic>?)?.cast<String>() ?? const <String>[],
+      xAddrs: (json['xAddrs'] as List<dynamic>?)?.cast<String>() ?? const <String>[],
+      metadataVersion: json['metadataVersion'] as int?,
+      sourceAddress: json['sourceAddress'] as String?,
+      lastSeenAt: json['lastSeenAt'] != null ? DateTime.parse(json['lastSeenAt'] as String) : null,
+    );
+  }
 }

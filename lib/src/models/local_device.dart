@@ -180,6 +180,76 @@ class LocalDevice {
         'type: $type, '
         'addresses: $addresses)';
   }
+
+  /// Converts this device to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'displayName': displayName,
+        if (hostname != null) 'hostname': hostname,
+        'addresses': addresses.map((e) => e.toJson()).toList(),
+        'interfaces': interfaces.map((e) => e.toJson()).toList(),
+        'services': services.map((e) => e.toJson()).toList(),
+        'type': type.name,
+        'capabilities': capabilities.map((e) => e.name).toList(),
+        'capabilityEvidence': capabilityEvidence.map((e) => e.toJson()).toList(),
+        'identity': identity.toJson(),
+        if (vendor != null) 'vendor': vendor!.toJson(),
+        'reachability': reachability.toJson(),
+        'discoveredBy': discoveredBy.map((e) => e.name).toList(),
+        if (firstSeenAt != null) 'firstSeenAt': firstSeenAt!.toIso8601String(),
+        if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+        if (advertisedTtl != null) 'advertisedTtl': advertisedTtl!.inMilliseconds,
+        'confidence': confidence,
+        'protocolMetadata': protocolMetadata,
+        'metadata': metadata,
+      };
+
+  /// Creates a [LocalDevice] from a JSON-compatible map.
+  factory LocalDevice.fromJson(Map<String, Object?> json) {
+    return LocalDevice(
+      id: json['id'] as String,
+      displayName: json['displayName'] as String,
+      hostname: json['hostname'] as String?,
+      addresses: (json['addresses'] as List<dynamic>?)
+              ?.map((e) => InternetAddressValue.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <InternetAddressValue>[],
+      interfaces: (json['interfaces'] as List<dynamic>?)
+              ?.map((e) => LocalNetworkInterface.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <LocalNetworkInterface>[],
+      services: (json['services'] as List<dynamic>?)
+              ?.map((e) => LocalService.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <LocalService>[],
+      type: LocalDeviceType.values.byName(json['type'] as String? ?? 'unknown'),
+      capabilities: (json['capabilities'] as List<dynamic>?)
+              ?.map((e) => LocalDeviceCapability.values.byName(e as String))
+              .toSet() ??
+          const <LocalDeviceCapability>{},
+      capabilityEvidence: (json['capabilityEvidence'] as List<dynamic>?)
+              ?.map((e) => CapabilityEvidence.fromJson(e as Map<String, Object?>))
+              .toList() ??
+          const <CapabilityEvidence>[],
+      identity: json['identity'] != null
+          ? LocalDeviceIdentity.fromJson(json['identity'] as Map<String, Object?>)
+          : const LocalDeviceIdentity(),
+      vendor: json['vendor'] != null ? LocalDeviceVendor.fromJson(json['vendor'] as Map<String, Object?>) : null,
+      reachability: json['reachability'] != null
+          ? LocalDeviceReachability.fromJson(json['reachability'] as Map<String, Object?>)
+          : const LocalDeviceReachability.unknown(),
+      discoveredBy: (json['discoveredBy'] as List<dynamic>?)
+              ?.map((e) => LocalDiscoveryProtocol.values.byName(e as String))
+              .toSet() ??
+          const <LocalDiscoveryProtocol>{},
+      firstSeenAt: json['firstSeenAt'] != null ? DateTime.parse(json['firstSeenAt'] as String) : null,
+      lastSeenAt: json['lastSeenAt'] != null ? DateTime.parse(json['lastSeenAt'] as String) : null,
+      advertisedTtl: json['advertisedTtl'] != null ? Duration(milliseconds: json['advertisedTtl'] as int) : null,
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
+      protocolMetadata: (json['protocolMetadata'] as Map<String, dynamic>?)?.cast<String, Object?>() ?? const <String, Object?>{},
+      metadata: (json['metadata'] as Map<String, dynamic>?)?.cast<String, Object?>() ?? const <String, Object?>{},
+    );
+  }
 }
 
 /// Vendor information for a discovered device.
@@ -220,6 +290,26 @@ class LocalDeviceVendor {
 
   @override
   int get hashCode => Object.hash(name, url, model, modelNumber, serialNumber);
+
+  /// Converts this vendor to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        if (name != null) 'name': name,
+        if (url != null) 'url': url!.toString(),
+        if (model != null) 'model': model,
+        if (modelNumber != null) 'modelNumber': modelNumber,
+        if (serialNumber != null) 'serialNumber': serialNumber,
+      };
+
+  /// Creates a [LocalDeviceVendor] from a JSON-compatible map.
+  factory LocalDeviceVendor.fromJson(Map<String, Object?> json) {
+    return LocalDeviceVendor(
+      name: json['name'] as String?,
+      url: json['url'] != null ? Uri.parse(json['url'] as String) : null,
+      model: json['model'] as String?,
+      modelNumber: json['modelNumber'] as String?,
+      serialNumber: json['serialNumber'] as String?,
+    );
+  }
 }
 
 /// The reachability status of a device.
@@ -276,6 +366,31 @@ class LocalDeviceReachability {
 
   /// The methods used to determine reachability.
   final Set<LocalReachabilityMethod> methods;
+
+  /// Converts this reachability to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'status': status.name,
+        if (lastCheckedAt != null) 'lastCheckedAt': lastCheckedAt!.toIso8601String(),
+        if (latency != null) 'latency': latency!.inMilliseconds,
+        if (successfulAddress != null) 'successfulAddress': successfulAddress,
+        if (successfulPort != null) 'successfulPort': successfulPort,
+        'methods': methods.map((e) => e.name).toList(),
+      };
+
+  /// Creates a [LocalDeviceReachability] from a JSON-compatible map.
+  factory LocalDeviceReachability.fromJson(Map<String, Object?> json) {
+    return LocalDeviceReachability(
+      status: LocalReachabilityStatus.values.byName(json['status'] as String? ?? 'unknown'),
+      lastCheckedAt: json['lastCheckedAt'] != null ? DateTime.parse(json['lastCheckedAt'] as String) : null,
+      latency: json['latency'] != null ? Duration(milliseconds: json['latency'] as int) : null,
+      successfulAddress: json['successfulAddress'] as String?,
+      successfulPort: json['successfulPort'] as int?,
+      methods: (json['methods'] as List<dynamic>?)
+              ?.map((e) => LocalReachabilityMethod.values.byName(e as String))
+              .toSet() ??
+          const {},
+    );
+  }
 }
 
 /// The method used to determine reachability.

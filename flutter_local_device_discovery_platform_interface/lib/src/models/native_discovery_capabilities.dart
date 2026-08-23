@@ -15,6 +15,11 @@ class NativeDiscoveryCapabilities {
     this.supportsWifiBandDetection = false,
     this.requiresLocalNetworkPermission = false,
     this.requiresMulticastPermission = false,
+    this.supportsNativeSsdp = false,
+    this.supportsNativeWsDiscovery = false,
+    this.supportsIcmpPing = false,
+    this.supportsNetworkInfo = false,
+    this.supportsGatewayInfo = false,
     this.platformDetails = const <String, Object?>{},
   });
 
@@ -32,6 +37,11 @@ class NativeDiscoveryCapabilities {
   final bool supportsWifiBandDetection;
   final bool requiresLocalNetworkPermission;
   final bool requiresMulticastPermission;
+  final bool supportsNativeSsdp;
+  final bool supportsNativeWsDiscovery;
+  final bool supportsIcmpPing;
+  final bool supportsNetworkInfo;
+  final bool supportsGatewayInfo;
   final Map<String, Object?> platformDetails;
 
   Map<String, Object?> toMap() {
@@ -50,6 +60,11 @@ class NativeDiscoveryCapabilities {
       'supportsWifiBandDetection': supportsWifiBandDetection,
       'requiresLocalNetworkPermission': requiresLocalNetworkPermission,
       'requiresMulticastPermission': requiresMulticastPermission,
+      'supportsNativeSsdp': supportsNativeSsdp,
+      'supportsNativeWsDiscovery': supportsNativeWsDiscovery,
+      'supportsIcmpPing': supportsIcmpPing,
+      'supportsNetworkInfo': supportsNetworkInfo,
+      'supportsGatewayInfo': supportsGatewayInfo,
       'platformDetails': platformDetails,
     };
   }
@@ -87,6 +102,12 @@ class NativeDiscoveryCapabilities {
           map['requiresLocalNetworkPermission'] as bool? ?? false,
       requiresMulticastPermission:
           map['requiresMulticastPermission'] as bool? ?? false,
+      supportsNativeSsdp: map['supportsNativeSsdp'] as bool? ?? false,
+      supportsNativeWsDiscovery:
+          map['supportsNativeWsDiscovery'] as bool? ?? false,
+      supportsIcmpPing: map['supportsIcmpPing'] as bool? ?? false,
+      supportsNetworkInfo: map['supportsNetworkInfo'] as bool? ?? false,
+      supportsGatewayInfo: map['supportsGatewayInfo'] as bool? ?? false,
       platformDetails: _stringMap(map['platformDetails']),
     );
   }

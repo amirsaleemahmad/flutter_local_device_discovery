@@ -68,7 +68,35 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
     connectivityManager = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     connectivityManager.registerDefaultNetworkCallback(networkCallback)
+    
+    nativeSsdpEventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "flutter_local_device_discovery/native_ssdp_events")
+    nativeSsdpEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+      override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        nativeSsdpEventSink = events
+      }
+      override fun onCancel(arguments: Any?) {
+        nativeSsdpEventSink = null
+      }
+    })
+
+    nativeWsDiscoveryEventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "flutter_local_device_discovery/native_ws_discovery_events")
+    nativeWsDiscoveryEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+      override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        nativeWsDiscoveryEventSink = events
+      }
+      override fun onCancel(arguments: Any?) {
+        nativeWsDiscoveryEventSink = null
+      }
+    })
   }
+
+  private var nativeSsdpEngine: NativeSsdpEngine? = null
+  private var nativeSsdpEventSink: EventChannel.EventSink? = null
+  private lateinit var nativeSsdpEventChannel: EventChannel
+
+  private var nativeWsDiscoveryEngine: NativeWsDiscoveryEngine? = null
+  private var nativeWsDiscoveryEventSink: EventChannel.EventSink? = null
+  private lateinit var nativeWsDiscoveryEventChannel: EventChannel
 
   override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
@@ -90,6 +118,12 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
       "updateRegisteredService" -> handleUpdateRegisteredService(call, result)
       "unregisterService" -> handleUnregisterService(call, result)
       "getDiagnostics" -> handleGetDiagnostics(call, result)
+      "startNativeSsdp" -> handleStartNativeSsdp(call, result)
+      "stopNativeSsdp" -> handleStopNativeSsdp(call, result)
+      "startNativeWsDiscovery" -> handleStartNativeWsDiscovery(call, result)
+      "stopNativeWsDiscovery" -> handleStopNativeWsDiscovery(call, result)
+      "getNetworkInfo" -> handleGetNetworkInfo(call, result)
+      "getGatewayInfo" -> handleGetGatewayInfo(call, result)
       else -> result.notImplemented()
     }
   }
@@ -286,7 +320,71 @@ class FlutterLocalDeviceDiscoveryPlugin : FlutterPlugin, MethodCallHandler, Even
           "androidSdk" to Build.VERSION.SDK_INT,
         ),
       ),
+      ),
     )
+  }
+
+  private fun handleStartNativeSsdp(call: MethodCall, result: Result) {
+    val args = call.arguments as? Map<*, *> ?: emptyMap<Any?, Any?>()
+    val sessionId = UUID.randomUUID().toString()
+    val searchTargets = (args["searchTargets"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+    
+    acquireMulticastLock()
+    nativeSsdpEngine = NativeSsdpEngine(sessionId, searchTargets) { event ->
+      Handler(Looper.getMainLooper()).post {
+        nativeSsdpEventSink?.success(event)
+      }
+    }
+    nativeSsdpEngine?.start()
+    result.success(sessionId)
+  }
+
+  private fun handleStopNativeSsdp(call: MethodCall, result: Result) {
+    nativeSsdpEngine?.stop()
+    nativeSsdpEngine = null
+    releaseMulticastLock()
+    result.success(null)
+  }
+
+  private fun handleStartNativeWsDiscovery(call: MethodCall, result: Result) {
+    val sessionId = UUID.randomUUID().toString()
+    
+    acquireMulticastLock()
+    nativeWsDiscoveryEngine = NativeWsDiscoveryEngine(sessionId) { event ->
+      Handler(Looper.getMainLooper()).post {
+        nativeWsDiscoveryEventSink?.success(event)
+      }
+    }
+    nativeWsDiscoveryEngine?.start()
+    result.success(sessionId)
+  }
+
+  private fun handleStopNativeWsDiscovery(call: MethodCall, result: Result) {
+    nativeWsDiscoveryEngine?.stop()
+    nativeWsDiscoveryEngine = null
+    releaseMulticastLock()
+    result.success(null)
+  }
+
+  private fun handleGetNetworkInfo(call: MethodCall, result: Result) {
+    val wifiInfo = wifiManager.connectionInfo
+    val linkProps = connectivityManager.getLinkProperties(connectivityManager.activeNetwork)
+    
+    result.success(mapOf(
+      "ssid" to wifiInfo.ssid,
+      "bssid" to wifiInfo.bssid,
+      "rssi" to wifiInfo.rssi,
+      "linkSpeed" to wifiInfo.linkSpeed,
+      "frequency" to wifiInfo.frequency,
+      "gateway" to linkProps?.routes?.find { it.isDefaultRoute }?.gateway?.hostAddress
+    ))
+  }
+
+  private fun handleGetGatewayInfo(call: MethodCall, result: Result) {
+    val dhcpInfo = wifiManager.dhcpInfo
+    result.success(mapOf(
+      "gateway" to android.text.format.Formatter.formatIpAddress(dhcpInfo.gateway)
+    ))
   }
 
   private fun acquireMulticastLock() {
@@ -659,4 +757,178 @@ class DiscoverySession(
 
     nsdManager.resolveService(serviceInfo, resolveListener)
   }
+}
+
+class NativeSsdpEngine(
+    private val sessionId: String,
+    private val searchTargets: List<String>,
+    private val eventCallback: (Map<String, Any?>) -> Unit
+) {
+    private var thread: Thread? = null
+    private var socket: java.net.MulticastSocket? = null
+    private var isRunning = false
+
+    fun start() {
+        if (isRunning) return
+        isRunning = true
+        thread = Thread {
+            try {
+                socket = java.net.MulticastSocket(1900)
+                socket?.joinGroup(java.net.InetAddress.getByName("239.255.255.250"))
+                val buffer = ByteArray(8192)
+                
+                eventCallback(mapOf(
+                    "type" to 0,
+                    "sessionId" to sessionId,
+                    "protocol" to 1,
+                    "timestamp" to isoTimestamp()
+                ))
+
+                while (isRunning) {
+                    val packet = java.net.DatagramPacket(buffer, buffer.size)
+                    socket?.receive(packet)
+                    
+                    val data = String(packet.data, 0, packet.length)
+                    // Parse SSDP and send event
+                    val address = packet.address.hostAddress
+                    eventCallback(mapOf(
+                        "type" to 4,
+                        "sessionId" to sessionId,
+                        "protocol" to 1,
+                        "service" to mapOf(
+                            "id" to "$sessionId:$address",
+                            "address" to address,
+                            "raw" to data
+                        ),
+                        "timestamp" to isoTimestamp()
+                    ))
+                }
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+        thread?.start()
+    }
+
+    fun stop() {
+        isRunning = false
+        try {
+            socket?.leaveGroup(java.net.InetAddress.getByName("239.255.255.250"))
+            socket?.close()
+        } catch (e: Exception) {
+        }
+        socket = null
+        thread?.interrupt()
+        thread = null
+        
+        eventCallback(mapOf(
+            "type" to 10,
+            "sessionId" to sessionId,
+            "protocol" to 1,
+            "timestamp" to isoTimestamp()
+        ))
+    }
+}
+
+class NativeWsDiscoveryEngine(
+    private val sessionId: String,
+    private val eventCallback: (Map<String, Any?>) -> Unit
+) {
+    private var thread: Thread? = null
+    private var socket: java.net.MulticastSocket? = null
+    private var isRunning = false
+
+    fun start() {
+        if (isRunning) return
+        isRunning = true
+        thread = Thread {
+            try {
+                socket = java.net.MulticastSocket(3702)
+                val group = java.net.InetAddress.getByName("239.255.255.250")
+                socket?.joinGroup(group)
+                val buffer = ByteArray(8192)
+                
+                eventCallback(mapOf(
+                    "type" to 0,
+                    "sessionId" to sessionId,
+                    "protocol" to 2, // WS-Discovery Protocol ID
+                    "timestamp" to isoTimestamp()
+                ))
+
+                // Send Probe
+                val uuid = java.util.UUID.randomUUID().toString()
+                val probeXml = """
+                    <?xml version="1.0" encoding="utf-8"?>
+                    <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+                      <soap:Header>
+                        <wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>
+                        <wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>
+                        <wsa:MessageID>urn:uuid:\$uuid</wsa:MessageID>
+                      </soap:Header>
+                      <soap:Body>
+                        <wsd:Probe/>
+                      </soap:Body>
+                    </soap:Envelope>
+                """.trimIndent()
+                val probeBytes = probeXml.toByteArray(Charsets.UTF_8)
+                val sendPacket = java.net.DatagramPacket(probeBytes, probeBytes.size, group, 3702)
+                socket?.send(sendPacket)
+
+                while (isRunning) {
+                    val packet = java.net.DatagramPacket(buffer, buffer.size)
+                    socket?.receive(packet)
+                    
+                    val data = String(packet.data, 0, packet.length)
+                    // Parse WS-Discovery and send event
+                    val address = packet.address.hostAddress
+                    
+                    // Simple parsing for EndpointReference, Types, Scopes, XAddrs
+                    val endpointReference = Regex("<wsa:Address>(.*?)</wsa:Address>").find(data)?.groupValues?.get(1)
+                    val types = Regex("<wsd:Types>(.*?)</wsd:Types>").find(data)?.groupValues?.get(1)
+                    val scopes = Regex("<wsd:Scopes>(.*?)</wsd:Scopes>").find(data)?.groupValues?.get(1)
+                    val xAddrs = Regex("<wsd:XAddrs>(.*?)</wsd:XAddrs>").find(data)?.groupValues?.get(1)
+                    
+                    if (endpointReference != null) {
+                        eventCallback(mapOf(
+                            "type" to 4,
+                            "sessionId" to sessionId,
+                            "protocol" to 2,
+                            "service" to mapOf(
+                                "id" to "\$sessionId:\$address",
+                                "address" to address,
+                                "endpointReference" to endpointReference,
+                                "types" to types,
+                                "scopes" to scopes,
+                                "xAddrs" to xAddrs,
+                                "raw" to data
+                            ),
+                            "timestamp" to isoTimestamp()
+                        ))
+                    }
+                }
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+        thread?.start()
+    }
+
+    fun stop() {
+        isRunning = false
+        try {
+            socket?.leaveGroup(java.net.InetAddress.getByName("239.255.255.250"))
+            socket?.close()
+        } catch (e: Exception) {
+        }
+        socket = null
+        thread?.interrupt()
+        thread = null
+        
+        eventCallback(mapOf(
+            "type" to 10,
+            "sessionId" to sessionId,
+            "protocol" to 2,
+            "timestamp" to isoTimestamp()
+        ))
+    }
 }

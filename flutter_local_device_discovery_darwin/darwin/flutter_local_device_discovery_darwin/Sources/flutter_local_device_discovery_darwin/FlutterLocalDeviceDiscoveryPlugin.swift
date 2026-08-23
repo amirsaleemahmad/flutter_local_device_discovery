@@ -20,6 +20,9 @@ public class FlutterLocalDeviceDiscoveryPlugin: NSObject, FlutterPlugin {
   private var registrations: [String: NWListener] = [:]
   private var pathMonitor: NWPathMonitor?
   private let pathMonitorQueue = DispatchQueue(label: "flutter_local_device_discovery.path_monitor")
+  private var messenger: FlutterBinaryMessenger?
+  private var ssdpEngine: Any?
+  private var wsDiscoveryEngine: Any?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     #if os(macOS)
@@ -37,6 +40,7 @@ public class FlutterLocalDeviceDiscoveryPlugin: NSObject, FlutterPlugin {
       binaryMessenger: messenger
     )
     let instance = FlutterLocalDeviceDiscoveryPlugin()
+    instance.messenger = messenger
     registrar.addMethodCallDelegate(instance, channel: channel)
     eventChannel.setStreamHandler(instance)
     registrar.addApplicationDelegate(instance)
@@ -64,6 +68,48 @@ public class FlutterLocalDeviceDiscoveryPlugin: NSObject, FlutterPlugin {
       handleUnregisterService(call: call, result: result)
     case "getDiagnostics":
       handleGetDiagnostics(result: result)
+    case "startNativeSsdp":
+      let sessionId = UUID().uuidString
+      if #available(macOS 11.0, iOS 14.0, *) {
+        if ssdpEngine == nil, let messenger = self.messenger {
+          let engine = NativeSsdpEngine(messenger: messenger)
+          ssdpEngine = engine
+        }
+        if let engine = ssdpEngine as? NativeSsdpEngine {
+          engine.start()
+        }
+      }
+      result(sessionId)
+    case "stopNativeSsdp":
+      if #available(macOS 11.0, iOS 14.0, *) {
+        if let engine = ssdpEngine as? NativeSsdpEngine {
+          engine.stop()
+        }
+      }
+      result(nil)
+    case "startNativeWsDiscovery":
+      let sessionId = UUID().uuidString
+      if #available(macOS 11.0, iOS 14.0, *) {
+        if wsDiscoveryEngine == nil, let messenger = self.messenger {
+          let engine = NativeWsDiscoveryEngine(messenger: messenger)
+          wsDiscoveryEngine = engine
+        }
+        if let engine = wsDiscoveryEngine as? NativeWsDiscoveryEngine {
+          engine.start()
+        }
+      }
+      result(sessionId)
+    case "stopNativeWsDiscovery":
+      if #available(macOS 11.0, iOS 14.0, *) {
+        if let engine = wsDiscoveryEngine as? NativeWsDiscoveryEngine {
+          engine.stop()
+        }
+      }
+      result(nil)
+    case "getNetworkInfo":
+      result([:])
+    case "getGatewayInfo":
+      result([:])
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -302,6 +348,7 @@ class DiscoverySession {
   private var browsingServiceTypes: Set<String> = []
   private var paused = false
   private var stopped = false
+  private var ssdpEngine: Any?
 
   init(
     sessionId: String,

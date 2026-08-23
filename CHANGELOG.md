@@ -1,3 +1,23 @@
+## 2.0.0 - 2026-08-20
+
+### Added
+
+* **Linux Platform Package (`flutter_local_device_discovery_linux`)**: Native D-Bus Avahi desktop client for mDNS/DNS-SD service browsing, resolution, and local service registration on Linux.
+* **Native SSDP & WS-Discovery Engines**: Moved SSDP and WS-Discovery discovery engines to native platform implementations on Android (`MulticastSocket` + `MulticastLock`), Darwin (`NWConnectionGroup`), and Windows (Winsock2 `IP_ADD_MEMBERSHIP`), automatically falling back to pure Dart when running in unsupported environments.
+* **Wi-Fi & Network Connection Metadata**: Added `getNetworkInfo()` returning `LocalNetworkInfo` (SSID, BSSID, RSSI dBm, signal quality %, frequency band 2.4/5/6 GHz, channel, link speed, gateway, DNS servers, and subnet mask).
+* **Network Topology Graph Model**: Added `NetworkTopologyGraph`, `NetworkNode`, `NetworkEdge`, and `TopologyBuilder` (`buildTopology()`) to construct visual and analytical star-topology graphs linking gateway routers, access points, and discovered network nodes with hop-count calculation.
+* **Native ICMP Reachability**: Added native ICMP ping support via `probeIcmp()` measuring true round-trip times (RTT) across platforms.
+* **Discovery Permissions & Diagnostics**: Added `checkPermissions()` and `requestPermissions()` (`DiscoveryPermissions`) to query local network, location, and Bluetooth authorization.
+* **BLE Device Discovery Models**: Added `BleDiscoveryRequest` and `BleDiscoveredDevice` data models and `LocalDiscoveryProtocol.ble` protocol enum value.
+* **JSON Serialization**: Added `toJson()` and `fromJson()` across all 15+ models (`LocalDevice`, `LocalService`, `LocalDiscoverySnapshot`, `LocalNetworkInfo`, `NetworkTopologyGraph`, etc.).
+* **Expanded OUI Vendor Lookup**: Expanded `OuiVendorResolver` database to over 500+ manufacturer prefixes (ASUS, Netgear, Ubiquiti, Linksys, Cisco, Mikrotik, Dell, Lenovo, Intel, Microsoft/Xbox, Xiaomi, Huawei, LG, Tuya, Shelly, Ring, etc.) and introduced `OuiVendorInfo` with `lookupMacDetailed()`.
+* **New IoT & Smart Home Decoders**: Added domain decoders in `IotProtocolDecoders` for Spotify Connect (`_spotify-connect._tcp`), Sonos (`_sonos._tcp`), MQTT Brokers (`_mqtt._tcp`), Home Assistant (`_home-assistant._tcp`), IPP/IPPS printers (`_ipp._tcp`), and DLNA UPnP AV.
+
+### Changed
+
+* Updated all federated package versions to `2.0.0`.
+* Cleaned up legacy doc comments across protocol and request models.
+
 ## 1.1.0 - 2026-08-16
 
 ### Added

@@ -34,3 +34,10 @@ export 'src/upnp/upnp_description_parser.dart';
 export 'src/ssdp/ssdp_message.dart';
 
 export 'src/utils/service_type_validator.dart';
+
+export 'src/models/local_network_info.dart';
+export 'src/models/ble_discovery_request.dart';
+export 'src/models/ble_discovered_device.dart';
+export 'src/models/discovery_permissions.dart';
+export 'src/topology/network_topology_graph.dart';
+export 'src/topology/topology_builder.dart';

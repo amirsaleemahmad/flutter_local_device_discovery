@@ -152,4 +152,180 @@ class MethodChannelFlutterLocalDeviceDiscovery
     }
     return NativeDiscoveryDiagnostics.fromMap(result);
   }
+
+  static const EventChannel _nativeSsdpEventChannel = EventChannel(
+    'flutter_local_device_discovery/native_ssdp_events',
+  );
+  Stream<NativeDiscoveryEvent>? _globalNativeSsdpEventStream;
+
+  static const EventChannel _nativeWsDiscoveryEventChannel = EventChannel(
+    'flutter_local_device_discovery/native_ws_discovery_events',
+  );
+  Stream<NativeDiscoveryEvent>? _globalNativeWsDiscoveryEventStream;
+
+  @override
+  Future<String> startNativeSsdp({
+    required List<String> searchTargets,
+    required int searchIntervalMs,
+    required bool includeLoopback,
+    required bool includeLinkLocal,
+    required bool includeVpnInterfaces,
+  }) async {
+    final result = await _channel.invokeMethod<String>(
+      'startNativeSsdp',
+      <String, Object?>{
+        'searchTargets': searchTargets,
+        'searchIntervalMs': searchIntervalMs,
+        'includeLoopback': includeLoopback,
+        'includeLinkLocal': includeLinkLocal,
+        'includeVpnInterfaces': includeVpnInterfaces,
+      },
+    );
+    if (result == null) {
+      throw PlatformException(
+        code: 'null_result',
+        message: 'startNativeSsdp returned null',
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> stopNativeSsdp(String sessionId) async {
+    await _channel.invokeMethod<void>('stopNativeSsdp', sessionId);
+  }
+
+  @override
+  Stream<NativeDiscoveryEvent> nativeSsdpEvents(String sessionId) {
+    final global = _globalNativeSsdpEventStream ??= _nativeSsdpEventChannel
+        .receiveBroadcastStream()
+        .map(
+          (event) =>
+              NativeDiscoveryEvent.fromMap(event as Map<Object?, Object?>),
+        )
+        .asBroadcastStream();
+    return global.where(
+      (event) => event.sessionId == null || event.sessionId == sessionId,
+    );
+  }
+
+  @override
+  Future<String> startNativeWsDiscovery({
+    required List<String> wsDiscoveryTypes,
+    required int searchIntervalMs,
+    required bool includeLoopback,
+    required bool includeLinkLocal,
+    required bool includeVpnInterfaces,
+  }) async {
+    final result = await _channel.invokeMethod<String>(
+      'startNativeWsDiscovery',
+      <String, Object?>{
+        'wsDiscoveryTypes': wsDiscoveryTypes,
+        'searchIntervalMs': searchIntervalMs,
+        'includeLoopback': includeLoopback,
+        'includeLinkLocal': includeLinkLocal,
+        'includeVpnInterfaces': includeVpnInterfaces,
+      },
+    );
+    if (result == null) {
+      throw PlatformException(
+        code: 'null_result',
+        message: 'startNativeWsDiscovery returned null',
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> stopNativeWsDiscovery(String sessionId) async {
+    await _channel.invokeMethod<void>('stopNativeWsDiscovery', sessionId);
+  }
+
+  @override
+  Stream<NativeDiscoveryEvent> nativeWsDiscoveryEvents(String sessionId) {
+    final global = _globalNativeWsDiscoveryEventStream ??=
+        _nativeWsDiscoveryEventChannel
+            .receiveBroadcastStream()
+            .map(
+              (event) =>
+                  NativeDiscoveryEvent.fromMap(event as Map<Object?, Object?>),
+            )
+            .asBroadcastStream();
+    return global.where(
+      (event) => event.sessionId == null || event.sessionId == sessionId,
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>> getNetworkInfo() async {
+    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'getNetworkInfo',
+    );
+    if (result == null) {
+      throw PlatformException(
+        code: 'null_result',
+        message: 'getNetworkInfo returned null',
+      );
+    }
+    return result.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  @override
+  Future<Map<String, Object?>> icmpPing(String address, int timeoutMs) async {
+    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'icmpPing',
+      <String, Object?>{
+        'address': address,
+        'timeoutMs': timeoutMs,
+      },
+    );
+    if (result == null) {
+      throw PlatformException(
+        code: 'null_result',
+        message: 'icmpPing returned null',
+      );
+    }
+    return result.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  @override
+  Future<Map<String, Object?>> getGatewayInfo() async {
+    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'getGatewayInfo',
+    );
+    if (result == null) {
+      throw PlatformException(
+        code: 'null_result',
+        message: 'getGatewayInfo returned null',
+      );
+    }
+    return result.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  @override
+  Future<Map<String, Object?>> checkPermissions() async {
+    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'checkPermissions',
+    );
+    if (result == null) {
+      return const <String, Object?>{};
+    }
+    return result.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  @override
+  Future<Map<String, Object?>> requestPermissions(
+    List<int> permissionTypes,
+  ) async {
+    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'requestPermissions',
+      <String, Object?>{
+        'permissionTypes': permissionTypes,
+      },
+    );
+    if (result == null) {
+      return const <String, Object?>{};
+    }
+    return result.map((key, value) => MapEntry(key.toString(), value));
+  }
 }

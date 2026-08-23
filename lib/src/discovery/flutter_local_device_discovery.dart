@@ -22,9 +22,15 @@ import 'local_discovery_protocol.dart';
 import 'local_discovery_request.dart';
 import 'local_discovery_session.dart';
 import 'local_service_registration.dart';
+import '../models/local_network_info.dart';
+import '../models/discovery_permissions.dart';
+import '../topology/network_topology_graph.dart';
+import '../topology/topology_builder.dart';
 
 /// The main entry point for local device discovery.
 class FlutterLocalDeviceDiscovery {
+  static const String _pluginVersion = '2.0.0';
+
   /// Creates a new [FlutterLocalDeviceDiscovery] instance.
   FlutterLocalDeviceDiscovery() {
     if (kIsWeb) WebFlutterLocalDeviceDiscovery.registerWith();
@@ -129,6 +135,11 @@ class FlutterLocalDeviceDiscovery {
       nativeStartError = error;
       if (!ssdpEnabled && !wsEnabled && _customAdapters.isEmpty) rethrow;
     }
+    
+    // Check capabilities for native SSDP/WS-Discovery
+    final capabilities = await platform.getCapabilities();
+    final useNativeSsdp = ssdpEnabled && (capabilities.supportsNativeSsdp || true);
+    final useNativeWsDiscovery = wsEnabled && (capabilities.supportsNativeWsDiscovery || true);
 
     final id = nativeSessionId ??
         'dart-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
@@ -138,8 +149,10 @@ class FlutterLocalDeviceDiscovery {
       request: request,
       platform: platform,
       nativeEvents: nativeEvents,
-      ssdpEngine: ssdpEnabled ? SsdpDiscoveryEngine() : null,
-      wsEngine: wsEnabled ? WsDiscoveryDiscoveryEngine() : null,
+      ssdpEngine: (ssdpEnabled && !useNativeSsdp) ? SsdpDiscoveryEngine() : null,
+      wsEngine: (wsEnabled && !useNativeWsDiscovery) ? WsDiscoveryDiscoveryEngine() : null,
+      useNativeSsdp: useNativeSsdp,
+      useNativeWsDiscovery: useNativeWsDiscovery,
       customAdapters: List.unmodifiable(_customAdapters),
       aggregator: DeviceAggregator(),
       sharedDiagnostics: _sharedDiagnostics,
@@ -205,7 +218,7 @@ class FlutterLocalDeviceDiscovery {
         ..add(LocalDiscoveryProtocol.wsDiscovery);
     }
     return LocalDiscoveryDiagnostics(
-      pluginVersion: '1.1.0',
+      pluginVersion: _pluginVersion,
       platformVersion: native.platformVersion,
       supportedProtocols: supportedProtocols,
       activeSessions: native.activeSessions > _sharedDiagnostics.activeSessions
@@ -266,7 +279,7 @@ class FlutterLocalDeviceDiscovery {
     );
   }
 
-  LocalDiscoveryEvent _eventFromNative(NativeDiscoveryEvent event) {
+  static LocalDiscoveryEvent _eventFromNative(NativeDiscoveryEvent event) {
     return switch (event.type) {
       0 => const LocalDiscoveryStarted(),
       1 => LocalDeviceAdded(_deviceFromNative(event.device!)),
@@ -285,7 +298,7 @@ class FlutterLocalDeviceDiscovery {
     };
   }
 
-  LocalDevice _deviceFromNative(NativeDevice device) {
+  static LocalDevice _deviceFromNative(NativeDevice device) {
     final services = device.services.map(_serviceFromNative).toList();
     return LocalDevice(
       id: device.id,
@@ -334,7 +347,7 @@ class FlutterLocalDeviceDiscovery {
     );
   }
 
-  LocalService _serviceFromNative(NativeService service) {
+  static LocalService _serviceFromNative(NativeService service) {
     return LocalService(
       id: service.id,
       instanceName: service.instanceName,
@@ -395,6 +408,65 @@ class FlutterLocalDeviceDiscovery {
       value >= 0 && value < LocalDeviceCapability.values.length
           ? LocalDeviceCapability.values[value]
           : null;
+
+  /// Returns information about the current network connection.
+  Future<LocalNetworkInfo> getNetworkInfo() async {
+    if (kIsWeb) {
+      return const LocalNetworkInfo();
+    }
+    final data = await FlutterLocalDeviceDiscoveryPlatform.instance.getNetworkInfo();
+    return LocalNetworkInfo.fromJson(data);
+  }
+
+  /// Pings a host using native ICMP.
+  Future<LocalDeviceReachability> probeIcmp(
+    String address, {
+    Duration timeout = const Duration(seconds: 2),
+  }) async {
+    if (kIsWeb) {
+      return const LocalDeviceReachability.unknown();
+    }
+    final data = await FlutterLocalDeviceDiscoveryPlatform.instance.icmpPing(
+      address,
+      timeout.inMilliseconds,
+    );
+    // Parse the result map into LocalDeviceReachability
+    final latencyMs = data['latencyMs'] as int?;
+    final success = data['success'] as bool? ?? false;
+    return LocalDeviceReachability(
+      status: success ? LocalReachabilityStatus.reachable : LocalReachabilityStatus.unreachable,
+      lastCheckedAt: DateTime.now(),
+      latency: latencyMs != null ? Duration(milliseconds: latencyMs) : null,
+      successfulAddress: success ? address : null,
+      methods: const {LocalReachabilityMethod.icmp},
+    );
+  }
+
+  /// Checks discovery-related permissions.
+  Future<DiscoveryPermissions> checkPermissions() async {
+    if (kIsWeb) return const DiscoveryPermissions();
+    try {
+      final data = await FlutterLocalDeviceDiscoveryPlatform.instance.checkPermissions();
+      return DiscoveryPermissions.fromJson(data);
+    } on UnimplementedError {
+      return const DiscoveryPermissions();
+    }
+  }
+
+  /// Builds a network topology graph from the current discovery state.
+  Future<NetworkTopologyGraph> buildTopology(LocalDiscoverySnapshot snapshot) async {
+    String? gatewayAddress;
+    try {
+      final gatewayInfo = await FlutterLocalDeviceDiscoveryPlatform.instance.getGatewayInfo();
+      gatewayAddress = gatewayInfo['gatewayAddress'] as String?;
+    } on UnimplementedError {
+      // Gateway info not available on this platform
+    }
+    return TopologyBuilder.build(
+      devices: snapshot.devices,
+      gatewayAddress: gatewayAddress,
+    );
+  }
 }
 
 class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
@@ -406,6 +478,8 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
     required this.nativeEvents,
     required this.ssdpEngine,
     required this.wsEngine,
+    this.useNativeSsdp = false,
+    this.useNativeWsDiscovery = false,
     this.customAdapters = const <DiscoveryProtocolAdapter>[],
     required this.aggregator,
     required this.sharedDiagnostics,
@@ -420,6 +494,8 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
   final Stream<LocalDiscoveryEvent> nativeEvents;
   final SsdpDiscoveryEngine? ssdpEngine;
   final WsDiscoveryDiscoveryEngine? wsEngine;
+  final bool useNativeSsdp;
+  final bool useNativeWsDiscovery;
   final List<DiscoveryProtocolAdapter> customAdapters;
   final DeviceAggregator aggregator;
   final _SharedDiscoveryDiagnostics sharedDiagnostics;
@@ -433,6 +509,8 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
   StreamSubscription<LocalDiscoveryEvent>? _nativeSubscription;
   StreamSubscription<SsdpEngineEvent>? _ssdpSubscription;
   StreamSubscription<WsDiscoveryEngineEvent>? _wsSubscription;
+  StreamSubscription<dynamic>? _nativeSsdpSubscription;
+  StreamSubscription<dynamic>? _nativeWsSubscription;
   final List<StreamSubscription<LocalDiscoveryEvent>> _customSubscriptions = [];
   Timer? _presenceTimer;
   LocalDiscoverySessionState _state = LocalDiscoverySessionState.created;
@@ -472,7 +550,22 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
       }
     }
 
-    if (ssdpEngine != null) {
+    if (useNativeSsdp) {
+      try {
+        final ssdpId = await platform.startNativeSsdp(
+          searchTargets: request.ssdpSearchTargets.toList(),
+          searchIntervalMs: request.mode == LocalDiscoveryMode.continuous ? 30000 : (request.duration.inMilliseconds ~/ 2).clamp(5000, 30000),
+          includeLoopback: request.includeLoopback,
+          includeLinkLocal: request.includeLinkLocal,
+          includeVpnInterfaces: request.includeVpnInterfaces,
+        );
+        _nativeSsdpSubscription = platform.nativeSsdpEvents(ssdpId).listen((event) {
+          _handleNativeEvent(FlutterLocalDeviceDiscovery._eventFromNative(event));
+        });
+      } catch (e) {
+        _warning('Failed to start native SSDP: $e');
+      }
+    } else if (ssdpEngine != null) {
       _ssdpSubscription = ssdpEngine!.events.listen(
         _handleSsdpEvent,
         onError: (Object error) => _warning('SSDP engine failed: $error'),
@@ -497,7 +590,22 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
       }
     }
 
-    if (wsEngine != null) {
+    if (useNativeWsDiscovery) {
+      try {
+        final wsId = await platform.startNativeWsDiscovery(
+          wsDiscoveryTypes: request.wsDiscoveryTypes.toList(),
+          searchIntervalMs: request.mode == LocalDiscoveryMode.continuous ? 30000 : (request.duration.inMilliseconds ~/ 2).clamp(5000, 30000),
+          includeLoopback: request.includeLoopback,
+          includeLinkLocal: request.includeLinkLocal,
+          includeVpnInterfaces: request.includeVpnInterfaces,
+        );
+        _nativeWsSubscription = platform.nativeWsDiscoveryEvents(wsId).listen((event) {
+          _handleNativeEvent(FlutterLocalDeviceDiscovery._eventFromNative(event));
+        });
+      } catch (e) {
+        _warning('Failed to start native WS-Discovery: $e');
+      }
+    } else if (wsEngine != null) {
       _wsSubscription = wsEngine!.events.listen(
         _handleWsEvent,
         onError: (Object error) =>
@@ -893,40 +1001,48 @@ class _LocalDiscoverySessionImpl implements LocalDiscoverySession {
 
   @override
   Future<void> stop() async {
-    if (_state == LocalDiscoverySessionState.stopped ||
-        _state == LocalDiscoverySessionState.stopping) {
-      return;
-    }
-    _state = LocalDiscoverySessionState.stopping;
+    if (_state == LocalDiscoverySessionState.stopped) return;
+    _state = LocalDiscoverySessionState.stopped;
     _presenceTimer?.cancel();
-    _syncSsdpMetrics();
-    _syncWsMetrics();
+    await _nativeSubscription?.cancel();
     for (final sub in _customSubscriptions) {
       await sub.cancel();
     }
-    _customSubscriptions.clear();
-    for (final adapter in customAdapters) {
+    
+    if (useNativeSsdp) {
+      await _nativeSsdpSubscription?.cancel();
       try {
-        await adapter.stop();
-      } catch (_) {}
+        await platform.stopNativeSsdp(nativeSessionId ?? id);
+      } catch (error) {
+        _warning('Failed to stop native SSDP: $error');
+      }
+    } else {
+      await _ssdpSubscription?.cancel();
+      await ssdpEngine?.stop();
     }
-    await _ssdpSubscription?.cancel();
-    await ssdpEngine?.stop();
-    await _wsSubscription?.cancel();
-    await wsEngine?.stop();
+    
+    if (useNativeWsDiscovery) {
+      await _nativeWsSubscription?.cancel();
+      try {
+        await platform.stopNativeWsDiscovery(nativeSessionId ?? id);
+      } catch (error) {
+        _warning('Failed to stop native WS-Discovery: $error');
+      }
+    } else {
+      await _wsSubscription?.cancel();
+      await wsEngine?.stop();
+    }
+    
     if (nativeSessionId != null) {
       try {
         await platform.stopDiscovery(nativeSessionId!);
-      } on Object catch (error) {
-        _warning('Native discovery did not stop cleanly: $error');
+      } catch (error) {
+        _warning('Failed to stop native discovery session: $error');
       }
     }
-    await _nativeSubscription?.cancel();
-    _state = LocalDiscoverySessionState.stopped;
-    sharedDiagnostics.sessionStopped();
     _emit(const LocalDiscoveryStopped());
-    if (!_stopped.isCompleted) _stopped.complete();
     await _controller.close();
+    _stopped.complete();
   }
 }
 

@@ -1,0 +1,26 @@
+name: flutter_local_device_discovery_linux
+description: Linux implementation of flutter_local_device_discovery using D-Bus Avahi.
+version: 2.0.0
+homepage: https://github.com/amirsaleemahmad/flutter_local_device_discovery
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_local_device_discovery_platform_interface: ^2.0.0
+  dbus: ^0.7.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  plugin:
+    implements: flutter_local_device_discovery
+    platforms:
+      linux:
+        dartPluginClass: FlutterLocalDeviceDiscoveryLinux

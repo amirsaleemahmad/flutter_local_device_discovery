@@ -88,4 +88,32 @@ class LocalDeviceIdentity {
         'model: $model, '
         'manufacturer: $manufacturer)';
   }
+
+  /// Converts this identity to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        if (macAddress != null) 'macAddress': macAddress,
+        if (serviceInstance != null) 'serviceInstance': serviceInstance,
+        if (uniqueDeviceName != null) 'uniqueDeviceName': uniqueDeviceName,
+        if (upnpUdn != null) 'upnpUdn': upnpUdn,
+        if (wsEndpointReference != null) 'wsEndpointReference': wsEndpointReference,
+        if (serialNumber != null) 'serialNumber': serialNumber,
+        if (model != null) 'model': model,
+        if (manufacturer != null) 'manufacturer': manufacturer,
+        'identifiers': identifiers,
+      };
+
+  /// Creates a [LocalDeviceIdentity] from a JSON-compatible map.
+  factory LocalDeviceIdentity.fromJson(Map<String, Object?> json) {
+    return LocalDeviceIdentity(
+      macAddress: json['macAddress'] as String?,
+      serviceInstance: json['serviceInstance'] as String?,
+      uniqueDeviceName: json['uniqueDeviceName'] as String?,
+      upnpUdn: json['upnpUdn'] as String?,
+      wsEndpointReference: json['wsEndpointReference'] as String?,
+      serialNumber: json['serialNumber'] as String?,
+      model: json['model'] as String?,
+      manufacturer: json['manufacturer'] as String?,
+      identifiers: (json['identifiers'] as Map<String, dynamic>?)?.cast<String, String>() ?? const <String, String>{},
+    );
+  }
 }

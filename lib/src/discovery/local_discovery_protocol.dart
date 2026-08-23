@@ -15,23 +15,21 @@ enum LocalDiscoveryProtocol {
   /// UPnP Device Description.
   upnp,
 
-  /// WS-Discovery, reserved for a future release.
-  ///
-  /// This protocol is not implemented in v0.2.0.
+  /// WS-Discovery.
   wsDiscovery,
 
-  /// Neighbor table inspection, reserved for a future release.
-  ///
-  /// This protocol is not implemented in v0.2.0.
+  /// Neighbor table inspection.
   neighborTable,
 
-  /// ICMP reachability, reserved for a future release.
-  ///
-  /// This protocol is not implemented in v0.2.0.
+  /// ICMP reachability.
   reachability,
 
-  /// Safe port probing, reserved for a future release.
-  ///
-  /// This protocol is not implemented in v0.2.0.
+  /// Safe port probing.
   safePortProbe,
+
+  /// Bluetooth Low Energy scanning.
+  ble,
+
+  /// Native ICMP reachability.
+  icmpPing,
 }

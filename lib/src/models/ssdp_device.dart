@@ -111,4 +111,44 @@ class SsdpDevice {
   @override
   String toString() =>
       'SsdpDevice(location: $location, usn: $usn, st: $searchTarget)';
+
+  /// Converts this device to a JSON-compatible map.
+  Map<String, Object?> toJson() => {
+        'location': location,
+        'usn': usn,
+        'searchTarget': searchTarget,
+        if (server != null) 'server': server,
+        if (cacheControlMaxAge != null) 'cacheControlMaxAge': cacheControlMaxAge,
+        if (bootId != null) 'bootId': bootId,
+        if (configId != null) 'configId': configId,
+        if (friendlyName != null) 'friendlyName': friendlyName,
+        if (manufacturer != null) 'manufacturer': manufacturer,
+        if (modelName != null) 'modelName': modelName,
+        if (udn != null) 'udn': udn,
+        if (deviceType != null) 'deviceType': deviceType,
+        if (sourceAddress != null) 'sourceAddress': sourceAddress,
+        'headers': headers,
+        if (lastSeenAt != null) 'lastSeenAt': lastSeenAt!.toIso8601String(),
+      };
+
+  /// Creates a [SsdpDevice] from a JSON-compatible map.
+  factory SsdpDevice.fromJson(Map<String, Object?> json) {
+    return SsdpDevice(
+      location: json['location'] as String,
+      usn: json['usn'] as String,
+      searchTarget: json['searchTarget'] as String,
+      server: json['server'] as String?,
+      cacheControlMaxAge: json['cacheControlMaxAge'] as int?,
+      bootId: json['bootId'] as String?,
+      configId: json['configId'] as String?,
+      friendlyName: json['friendlyName'] as String?,
+      manufacturer: json['manufacturer'] as String?,
+      modelName: json['modelName'] as String?,
+      udn: json['udn'] as String?,
+      deviceType: json['deviceType'] as String?,
+      sourceAddress: json['sourceAddress'] as String?,
+      headers: (json['headers'] as Map<String, dynamic>?)?.cast<String, String>() ?? const <String, String>{},
+      lastSeenAt: json['lastSeenAt'] != null ? DateTime.parse(json['lastSeenAt'] as String) : null,
+    );
+  }
 }

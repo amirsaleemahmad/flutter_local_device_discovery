@@ -4,30 +4,33 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/X8Y824GXT3)
 
-Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 1.1 combines native mDNS/DNS-SD browsing with SSDP, WS-Discovery, offline IEEE OUI manufacturer resolution, specialized smart home decoders (Matter, HomeKit HAP, Google Cast, AirPlay), custom protocol adapters, reachability checks, and multicast health diagnostics.
+Discover, resolve, classify, and monitor devices and services on the local network from Flutter. Version 2.0 brings native SSDP & WS-Discovery engines, native Linux D-Bus Avahi desktop support, network topology graph mapping, native Wi-Fi connection metadata, native ICMP pinging, permission querying, expanded 500+ OUI manufacturer resolution, and specialized smart home decoders (Matter, HomeKit HAP, Google Cast, AirPlay, Spotify Connect, Sonos, MQTT, Home Assistant, IPP).
 
 ## Features
 
-- Native Android NSD, Apple Network framework, and Windows DNS-SD service discovery
-- mDNS, DNS-SD, and Bonjour browsing, service resolution, and dynamic TXT updates
-- Active SSDP M-SEARCH and passive SSDP alive/update/byebye monitoring
-- WS-Discovery (SOAP/UDP) targeting ONVIF IP security cameras and enterprise equipment
-- Offline IEEE OUI manufacturer resolution for discovered MAC addresses
-- Smart home & IoT protocol decoders (Matter/Thread, HomeKit HAP, Google Cast, AirPlay)
+- Native Android NSD, Apple Network framework, Windows DNS-SD, and Linux D-Bus Avahi service discovery
+- Native SSDP and WS-Discovery multicast engines on Android, iOS, macOS, Windows, and Linux
+- Network topology graph builder (`buildTopology()`) with automatic gateway detection and hop-count analysis
+- Native Wi-Fi & network metadata inspection (`getNetworkInfo()`) for SSID, BSSID, RSSI, band, channel, speed, and gateway
+- Native ICMP reachability probing (`probeIcmp()`)
+- Discovery permission checking and requesting (`checkPermissions()`)
+- Offline IEEE OUI manufacturer resolution for 500+ vendor prefixes
+- Smart home & IoT protocol decoders (Matter/Thread, HomeKit HAP, Google Cast, AirPlay, Spotify, Sonos, MQTT, Home Assistant, IPP)
 - Modular `DiscoveryProtocolAdapter` API for integrating custom discovery engines
 - Multicast health diagnostics to detect router multicast drops / IGMP snooping
 - Secure, bounded UPnP device-description retrieval with anti-SSRF protections
 - Cross-protocol deduplication by UDN, hostname, address, and service identity
-- Device classification with inspectable capability evidence
+- Full JSON serialization (`toJson()` / `fromJson()`) across all models
 
 ## Platform support
 
 | Platform | Minimum | Discovery support |
 | --- | --- | --- |
-| Android | API 21 | Native NSD plus SSDP/UPnP and WS-Discovery |
-| iOS | 13.0 | Network framework plus SSDP/UPnP and WS-Discovery |
-| macOS | 10.15 | Network framework plus SSDP/UPnP and WS-Discovery |
-| Windows | Flutter-supported versions | Native DNS-SD/mDNS browsing, resolution, and service registration; SSDP/UPnP and WS-Discovery |
+| Android | API 21 | Native NSD, native SSDP/UPnP, native WS-Discovery, Wi-Fi info, gateway detection, ARP cache |
+| iOS | 13.0 | Network framework, native SSDP/UPnP, native WS-Discovery, Wi-Fi info, gateway detection |
+| macOS | 10.15 | Network framework, native SSDP/UPnP, native WS-Discovery, CoreWLAN Wi-Fi info, gateway detection |
+| Windows | Flutter-supported versions | Native DNS-SD/mDNS, native SSDP/UPnP, native WS-Discovery, WLAN API info, gateway detection |
+| Linux | Flutter-supported versions | Native D-Bus Avahi mDNS/DNS-SD, native SSDP/WS-Discovery, NetworkManager info, `/proc/net/route` gateway |
 | Web | — | API compiles and reports unsupported; browsers cannot open the required multicast sockets |
 
 The package requires Dart 3.5 or later and Flutter 3.24 or later.
@@ -38,7 +41,7 @@ Add the package to your application:
 
 ```yaml
 dependencies:
-  flutter_local_device_discovery: ^1.1.0
+  flutter_local_device_discovery: ^2.0.0
 ```
 
 Then run `flutter pub get`.

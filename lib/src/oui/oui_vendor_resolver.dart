@@ -1,4 +1,26 @@
 /// Resolves MAC addresses to hardware manufacturers using an offline IEEE OUI lookup database.
+/// Detailed vendor information resolved from a MAC address OUI prefix.
+class OuiVendorInfo {
+  const OuiVendorInfo({
+    required this.name,
+    this.fullOrganizationName,
+    this.country,
+    this.deviceCategory,
+  });
+
+  /// Short vendor name (e.g., 'Apple, Inc.').
+  final String name;
+
+  /// Full registered organization name.
+  final String? fullOrganizationName;
+
+  /// Country of the registered organization.
+  final String? country;
+
+  /// Hint about the typical device category (e.g., 'Smart Home', 'Networking', 'Computing').
+  final String? deviceCategory;
+}
+
 class OuiVendorResolver {
   const OuiVendorResolver._();
 
@@ -220,7 +242,267 @@ class OuiVendorResolver {
     'ac:63:be': 'Amazon Technologies Inc.',
     'f0:27:2d': 'Amazon Technologies Inc.',
     'f0:81:73': 'Amazon Technologies Inc.',
+
+    // ASUS
+    '00:1a:92': 'ASUS',
+    '1c:87:2c': 'ASUS',
+    '2c:fd:a1': 'ASUS',
+    '38:d5:47': 'ASUS',
+    '40:b0:76': 'ASUS',
+    '74:d0:2b': 'ASUS',
+    'ac:9e:17': 'ASUS',
+    'b0:6e:bf': 'ASUS',
+    'f8:32:e4': 'ASUS',
+
+    // Netgear
+    '00:09:5b': 'Netgear',
+    '00:0f:b5': 'Netgear',
+    '00:14:6c': 'Netgear',
+    '00:1b:2f': 'Netgear',
+    '00:1e:2a': 'Netgear',
+    '00:1f:33': 'Netgear',
+    '20:0c:c8': 'Netgear',
+    '20:e5:2a': 'Netgear',
+    '28:80:88': 'Netgear',
+    '44:94:fc': 'Netgear',
+    '6c:b0:ce': 'Netgear',
+    '84:1b:5e': 'Netgear',
+    'a0:21:b7': 'Netgear',
+    'c4:3d:c7': 'Netgear',
+    'e4:f4:c6': 'Netgear',
+
+    // Ubiquiti
+    '00:27:22': 'Ubiquiti',
+    '04:18:d6': 'Ubiquiti',
+    '18:e8:29': 'Ubiquiti',
+    '24:5a:4c': 'Ubiquiti',
+    '68:d7:9a': 'Ubiquiti',
+    '74:ac:b9': 'Ubiquiti',
+    '78:8a:20': 'Ubiquiti',
+    '80:2a:a8': 'Ubiquiti',
+    'b4:fb:e4': 'Ubiquiti',
+    'dc:9f:db': 'Ubiquiti',
+    'f0:9f:c2': 'Ubiquiti',
+    'fc:ec:da': 'Ubiquiti',
+
+    // Linksys/Belkin
+    '00:04:5a': 'Linksys/Belkin',
+    '00:06:25': 'Linksys/Belkin',
+    '00:0c:41': 'Linksys/Belkin',
+    '00:12:17': 'Linksys/Belkin',
+    '00:14:bf': 'Linksys/Belkin',
+    '00:1a:70': 'Linksys/Belkin',
+    '00:1e:e5': 'Linksys/Belkin',
+    '00:22:6b': 'Linksys/Belkin',
+    '00:25:9c': 'Linksys/Belkin',
+    '20:aa:4b': 'Linksys/Belkin',
+    '58:ef:68': 'Linksys/Belkin',
+    'c0:56:27': 'Linksys/Belkin',
+    'e8:f7:24': 'Linksys/Belkin',
+
+    // Mikrotik
+    '00:0c:42': 'Mikrotik',
+    '48:8f:5a': 'Mikrotik',
+    '6c:3b:6b': 'Mikrotik',
+    'b8:69:f4': 'Mikrotik',
+    'cc:2d:e0': 'Mikrotik',
+    'e4:8d:8c': 'Mikrotik',
+
+    // Cisco
+    '00:00:0c': 'Cisco',
+    '00:01:42': 'Cisco',
+    '00:01:63': 'Cisco',
+    '00:01:64': 'Cisco',
+    '00:01:96': 'Cisco',
+    '00:01:97': 'Cisco',
+    '00:01:c7': 'Cisco',
+    '00:01:c9': 'Cisco',
+    '00:02:3d': 'Cisco',
+    '00:02:4a': 'Cisco',
+    '00:02:4b': 'Cisco',
+    '00:02:b9': 'Cisco',
+    '00:02:ba': 'Cisco',
+    '00:02:fc': 'Cisco',
+    '00:02:fd': 'Cisco',
+
+    // Dell
+    '00:06:5b': 'Dell',
+    '00:08:74': 'Dell',
+    '00:0b:db': 'Dell',
+    '00:0d:56': 'Dell',
+    '00:0f:1f': 'Dell',
+    '00:11:43': 'Dell',
+    '00:12:3f': 'Dell',
+    '00:13:72': 'Dell',
+    '00:14:22': 'Dell',
+    '00:15:c5': 'Dell',
+    '00:18:8b': 'Dell',
+    '00:19:b9': 'Dell',
+    '00:1a:a0': 'Dell',
+    '00:1c:23': 'Dell',
+    '00:1d:09': 'Dell',
+    '00:1e:4f': 'Dell',
+    '00:1e:c9': 'Dell',
+    '00:21:70': 'Dell',
+    '00:21:9b': 'Dell',
+    '00:22:19': 'Dell',
+    '00:23:ae': 'Dell',
+    '00:24:e8': 'Dell',
+    '00:25:64': 'Dell',
+    '00:26:b9': 'Dell',
+
+    // Lenovo
+    '00:06:1b': 'Lenovo',
+    '00:09:2d': 'Lenovo',
+    '00:12:fe': 'Lenovo',
+    '00:16:d3': 'Lenovo',
+    '00:1a:6b': 'Lenovo',
+    '28:d2:44': 'Lenovo',
+    '50:7b:9d': 'Lenovo',
+    '54:ee:75': 'Lenovo',
+    '70:5a:0f': 'Lenovo',
+    '74:e5:0b': 'Lenovo',
+    '98:fa:9b': 'Lenovo',
+    'c8:5b:76': 'Lenovo',
+    'e8:6a:64': 'Lenovo',
+
+    // Intel
+    '00:02:b3': 'Intel',
+    '00:03:47': 'Intel',
+    '00:04:23': 'Intel',
+    '00:07:e9': 'Intel',
+    '00:0c:f1': 'Intel',
+    '00:0e:0c': 'Intel',
+    '00:0e:35': 'Intel',
+    '00:11:11': 'Intel',
+    '00:12:f0': 'Intel',
+    '00:13:02': 'Intel',
+    '00:13:20': 'Intel',
+    '00:13:ce': 'Intel',
+    '00:13:e8': 'Intel',
+    '00:15:00': 'Intel',
+    '00:15:17': 'Intel',
+    '00:16:6f': 'Intel',
+    '00:16:76': 'Intel',
+    '00:16:ea': 'Intel',
+    '00:16:eb': 'Intel',
+    '00:17:35': 'Intel',
+    '00:18:de': 'Intel',
+    '00:19:d1': 'Intel',
+    '00:19:d2': 'Intel',
+    '00:1b:21': 'Intel',
+    '00:1b:77': 'Intel',
+    '00:1c:bf': 'Intel',
+    '00:1d:e0': 'Intel',
+    '00:1e:64': 'Intel',
+    '00:1e:65': 'Intel',
+    '00:1f:3b': 'Intel',
+    '00:1f:3c': 'Intel',
+
+    // Microsoft/Xbox
+    '00:03:ff': 'Microsoft/Xbox',
+    '00:0d:3a': 'Microsoft/Xbox',
+    '00:12:5a': 'Microsoft/Xbox',
+    '00:15:5d': 'Microsoft/Xbox',
+    '00:17:fa': 'Microsoft/Xbox',
+    '00:1d:d8': 'Microsoft/Xbox',
+    '00:22:48': 'Microsoft/Xbox',
+    '00:25:ae': 'Microsoft/Xbox',
+    '28:18:78': 'Microsoft/Xbox',
+    '48:50:73': 'Microsoft/Xbox',
+    '60:45:bd': 'Microsoft/Xbox',
+    '7c:1e:52': 'Microsoft/Xbox',
+    'b4:0e:de': 'Microsoft/Xbox',
+    'c8:3f:26': 'Microsoft/Xbox',
+    'dc:53:60': 'Microsoft/Xbox',
+
+    // Xiaomi
+    '00:9e:c8': 'Xiaomi',
+    '04:cf:8c': 'Xiaomi',
+    '0c:1d:af': 'Xiaomi',
+    '10:2a:b3': 'Xiaomi',
+    '14:f6:5a': 'Xiaomi',
+    '18:59:36': 'Xiaomi',
+    '20:47:da': 'Xiaomi',
+    '28:6c:07': 'Xiaomi',
+    '34:80:b3': 'Xiaomi',
+    '38:a4:ed': 'Xiaomi',
+    '50:ec:50': 'Xiaomi',
+    '58:44:98': 'Xiaomi',
+    '64:09:80': 'Xiaomi',
+    '64:cc:2e': 'Xiaomi',
+    '7c:49:eb': 'Xiaomi',
+    '78:02:f8': 'Xiaomi',
+    '78:11:dc': 'Xiaomi',
+    '9c:99:a0': 'Xiaomi',
+    'a4:77:33': 'Xiaomi',
+    'ac:c1:ee': 'Xiaomi',
+    'b0:e2:35': 'Xiaomi',
+    'fc:64:ba': 'Xiaomi',
+
+    // Huawei
+    '00:18:82': 'Huawei',
+    '00:1e:10': 'Huawei',
+    '00:25:68': 'Huawei',
+    '00:25:9e': 'Huawei',
+    '00:34:fe': 'Huawei',
+    '00:46:4b': 'Huawei',
+    '00:66:4b': 'Huawei',
+    '00:9a:cd': 'Huawei',
+    '04:02:1f': 'Huawei',
+    '04:25:c5': 'Huawei',
+    '04:4f:4c': 'Huawei',
+    '04:b0:e7': 'Huawei',
+    '04:c0:6f': 'Huawei',
+    '04:f9:38': 'Huawei',
+    '08:19:a6': 'Huawei',
+    '08:63:61': 'Huawei',
+    '0c:37:dc': 'Huawei',
+
+    // LG
+    '00:05:c9': 'LG',
+    '00:1c:62': 'LG',
+    '00:1e:75': 'LG',
+    '00:1f:6b': 'LG',
+    '00:1f:e2': 'LG',
+    '00:22:a9': 'LG',
+    '00:24:83': 'LG',
+    '00:25:e5': 'LG',
+    '00:26:e2': 'LG',
+    '10:68:3f': 'LG',
+    '20:3d:bd': 'LG',
+    '2c:54:cf': 'LG',
+    '30:b4:9e': 'LG',
+    '34:4d:f7': 'LG',
+    '40:b8:9a': 'LG',
+    '58:a2:b5': 'LG',
+    '64:99:5d': 'LG',
+    '88:c9:d0': 'LG',
+    'a8:16:b2': 'LG',
+    'a8:23:fe': 'LG',
+    'ac:0d:1b': 'LG',
+    'bc:f5:ac': 'LG',
+    'c4:36:6c': 'LG',
+    'cc:2d:8c': 'LG',
+
+    // Tuya / Smart Life
+    '10:d5:61': 'Tuya / Smart Life',
+    '50:02:91': 'Tuya / Smart Life',
+    '7c:f6:66': 'Tuya / Smart Life',
+    '84:e3:42': 'Tuya / Smart Life',
+    'd4:a6:51': 'Tuya / Smart Life',
+    'd8:1f:12': 'Tuya / Smart Life',
+
+    // Shelly
+    '08:3a:f2': 'Shelly',
+    '30:83:98': 'Shelly',
+
+    // Ring (Amazon)
+    '34:3e:a4': 'Ring (Amazon)',
+    '4c:eb:42': 'Ring (Amazon)',
+    'a8:b2:da': 'Ring (Amazon)',
   };
+
 
   /// Looks up a hardware manufacturer by MAC address.
   ///
@@ -243,5 +525,12 @@ class OuiVendorResolver {
         '${clean.substring(0, 2)}:${clean.substring(2, 4)}:${clean.substring(4, 6)}';
 
     return _ouiPrefixes[prefix];
+  }
+
+  /// Looks up detailed vendor information by MAC address.
+  static OuiVendorInfo? lookupMacDetailed(String? macAddress) {
+    final name = lookupMac(macAddress);
+    if (name == null) return null;
+    return OuiVendorInfo(name: name);
   }
 }

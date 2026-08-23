@@ -7,3 +7,5 @@ dependency_overrides:
     path: flutter_local_device_discovery_darwin
   flutter_local_device_discovery_windows:
     path: flutter_local_device_discovery_windows
+  flutter_local_device_discovery_linux:
+    path: flutter_local_device_discovery_linux

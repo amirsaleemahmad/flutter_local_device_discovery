@@ -1,3 +1,10 @@
+## 2.0.0 - 2026-08-20
+
+* Added method channel contracts for native SSDP (`startNativeSsdp`, `stopNativeSsdp`, `nativeSsdpEvents`).
+* Added method channel contracts for native WS-Discovery (`startNativeWsDiscovery`, `stopNativeWsDiscovery`, `nativeWsDiscoveryEvents`).
+* Added `getNetworkInfo()`, `icmpPing()`, `getGatewayInfo()`, `checkPermissions()`, and `requestPermissions()`.
+* Added capability flags (`supportsNativeSsdp`, `supportsNativeWsDiscovery`, `supportsIcmpPing`, `supportsNetworkInfo`, `supportsGatewayInfo`) to `NativeDiscoveryCapabilities`.
+
 ## 1.1.0 - 2026-08-16
 
 * Added `supportsCustomAdapters`, `supportsMulticastHealthCheck`, and `supportsWifiBandDetection` to `NativeDiscoveryCapabilities`.

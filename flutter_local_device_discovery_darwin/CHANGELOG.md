@@ -1,3 +1,10 @@
+## 2.0.0 - 2026-08-20
+
+* Added native Swift SSDP engine using `NWConnectionGroup` for iOS 14+ / macOS 11+.
+* Added native Swift WS-Discovery engine using `NWConnectionGroup` and Foundation `XMLParser`.
+* Added native Wi-Fi information via `CoreWLAN` and `NEHotspotNetwork`.
+* Updated platform interface dependency to `^2.0.0`.
+
 ## 1.1.0 - 2026-08-16
 
 * Updated platform interface dependency to `^1.1.0`.

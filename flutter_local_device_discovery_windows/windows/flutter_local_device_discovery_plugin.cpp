@@ -10,6 +10,8 @@
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
 #include <windns.h>
+#include <wlanapi.h>
+#pragma comment(lib, "wlanapi.lib")
 
 #include <chrono>
 #include <memory>
@@ -422,6 +424,131 @@ static VOID WINAPIV OnResolveCallback(DWORD Status, PVOID pQueryContext,
   }
 }
 
+
+class NativeWsDiscoveryEngine {
+public:
+  NativeWsDiscoveryEngine(std::string session_id, DiscoveryEventStreamHandler* stream_handler) 
+    : session_id_(std::move(session_id)), stream_handler_(stream_handler), running_(false) {}
+    
+  ~NativeWsDiscoveryEngine() { Stop(); }
+  
+  void Start() {
+    if (running_) return;
+    running_ = true;
+    thread_ = std::thread([this]() {
+      SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+      if (sock == INVALID_SOCKET) return;
+      
+      struct sockaddr_in local_addr;
+      memset(&local_addr, 0, sizeof(local_addr));
+      local_addr.sin_family = AF_INET;
+      local_addr.sin_port = htons(3702);
+      local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+      
+      bind(sock, (struct sockaddr*)&local_addr, sizeof(local_addr));
+      
+      struct ip_mreq mreq;
+      mreq.imr_multiaddr.s_addr = inet_addr("239.255.255.250");
+      mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+      setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
+      
+      const char* probe = "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:wsd=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\"><soap:Header><wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To><wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action><wsa:MessageID>urn:uuid:12345</wsa:MessageID></soap:Header><soap:Body><wsd:Probe/></soap:Body></soap:Envelope>";
+      
+      struct sockaddr_in dest;
+      memset(&dest, 0, sizeof(dest));
+      dest.sin_family = AF_INET;
+      dest.sin_port = htons(3702);
+      dest.sin_addr.s_addr = inet_addr("239.255.255.250");
+      
+      sendto(sock, probe, strlen(probe), 0, (struct sockaddr*)&dest, sizeof(dest));
+      
+      char buffer[8192];
+      while (running_) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(sock, &readfds);
+        
+        struct timeval tv = {1, 0};
+        int ret = select(0, &readfds, NULL, NULL, &tv);
+        if (ret > 0) {
+          struct sockaddr_in from;
+          int fromlen = sizeof(from);
+          int bytes = recvfrom(sock, buffer, sizeof(buffer) - 1, 0, (struct sockaddr*)&from, &fromlen);
+          if (bytes > 0) {
+            buffer[bytes] = 0;
+            std::string data(buffer);
+            
+            std::string endpoint = "";
+            size_t start = data.find("<wsa:Address>");
+            if (start != std::string::npos) {
+              start += 13;
+              size_t end = data.find("</wsa:Address>", start);
+              if (end != std::string::npos) {
+                endpoint = data.substr(start, end - start);
+              }
+            }
+            
+            std::string types = "";
+            size_t types_start = data.find("<wsd:Types>");
+            if (types_start != std::string::npos) {
+              types_start += 11;
+              size_t types_end = data.find("</wsd:Types>", types_start);
+              if (types_end != std::string::npos) {
+                types = data.substr(types_start, types_end - types_start);
+              }
+            }
+            
+            std::string xaddrs = "";
+            size_t xaddrs_start = data.find("<wsd:XAddrs>");
+            if (xaddrs_start != std::string::npos) {
+              xaddrs_start += 12;
+              size_t xaddrs_end = data.find("</wsd:XAddrs>", xaddrs_start);
+              if (xaddrs_end != std::string::npos) {
+                xaddrs = data.substr(xaddrs_start, xaddrs_end - xaddrs_start);
+              }
+            }
+            
+            if (!endpoint.empty()) {
+              using namespace flutter;
+              EncodableMap service_map;
+              service_map[EncodableValue("id")] = EncodableValue(session_id_ + ":" + endpoint);
+              service_map[EncodableValue("endpointReference")] = EncodableValue(endpoint);
+              service_map[EncodableValue("types")] = EncodableValue(types);
+              service_map[EncodableValue("xAddrs")] = EncodableValue(xaddrs);
+              service_map[EncodableValue("raw")] = EncodableValue(data);
+              
+              EncodableMap event_map;
+              event_map[EncodableValue("type")] = EncodableValue(4);
+              event_map[EncodableValue("sessionId")] = EncodableValue(session_id_);
+              event_map[EncodableValue("protocol")] = EncodableValue(2);
+              event_map[EncodableValue("service")] = EncodableValue(service_map);
+              
+              if (stream_handler_) {
+                 stream_handler_->EmitEvent(EncodableValue(event_map));
+              }
+            }
+          }
+        }
+      }
+      
+      closesocket(sock);
+    });
+  }
+  
+  void Stop() {
+    running_ = false;
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+  }
+  
+private:
+  std::string session_id_;
+  DiscoveryEventStreamHandler* stream_handler_;
+  bool running_;
+  std::thread thread_;
+};
+
 // static
 void FlutterLocalDeviceDiscoveryPlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows* registrar) {
@@ -456,6 +583,9 @@ FlutterLocalDeviceDiscoveryPlugin::FlutterLocalDeviceDiscoveryPlugin(
 }
 
 FlutterLocalDeviceDiscoveryPlugin::~FlutterLocalDeviceDiscoveryPlugin() {
+  if (ws_discovery_engine_) {
+    delete static_cast<NativeWsDiscoveryEngine*>(ws_discovery_engine_);
+  }
   sessions_.clear();
   registered_services_.clear();
 }
@@ -483,6 +613,19 @@ void FlutterLocalDeviceDiscoveryPlugin::HandleMethodCall(
     HandleUpdateRegisteredService(method_call, std::move(result));
   } else if (method == "unregisterService") {
     HandleUnregisterService(method_call, std::move(result));
+  } else if (method == "startNativeSsdp") {
+    HandleStartNativeSsdp(method_call, std::move(result));
+  } else if (method == "stopNativeSsdp") {
+    HandleStopNativeSsdp(method_call, std::move(result));
+  } else if (method == "startNativeWsDiscovery") {
+    HandleStartNativeWsDiscovery(method_call, std::move(result));
+  } else if (method == "stopNativeWsDiscovery") {
+    HandleStopNativeWsDiscovery(method_call, std::move(result));
+  } else if (method == "getNetworkInfo") {
+    HandleGetNetworkInfo(method_call, std::move(result));
+  } else if (method == "getGatewayInfo") {
+    HandleGetGatewayInfo(method_call, std::move(result));
+
   } else {
     result->NotImplemented();
   }
