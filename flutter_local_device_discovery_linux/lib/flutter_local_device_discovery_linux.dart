@@ -26,8 +26,8 @@ class FlutterLocalDeviceDiscoveryLinux extends FlutterLocalDeviceDiscoveryPlatfo
       supportsIpv4: true,
       supportsIpv6: true,
       supportsMultipleInterfaces: true,
-      supportsNetworkInfo: true,
-      supportsGatewayInfo: true,
+      // supportsNetworkInfo: true,
+      // supportsGatewayInfo: true,
       platformDetails: <String, Object?>{
         'linuxDbusAvahi': true,
       },
